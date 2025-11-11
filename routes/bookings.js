@@ -6,7 +6,7 @@
 
 const router = require('express').Router();
 const ctrl = require('../controllers/bookingController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
 // ============ LEGACY ROUTES (DEPRECATED) ============
 // These routes are maintained for backward compatibility
@@ -16,7 +16,7 @@ const { authenticateToken, requireRole } = require('../middlewares/auth');
  * @route POST /api/bookings
  * @deprecated Use /api/user/bookings instead
  */
-router.post('/', authenticateToken, requireRole(['USER']), ctrl.createBooking);
+router.post('/', authenticate, requireRole(['USER']), ctrl.createBooking);
 
 /**
  * @route POST /api/bookings/complete
@@ -28,18 +28,18 @@ router.post('/complete', ctrl.completePayment);
  * @route GET /api/bookings/my
  * @deprecated Use /api/user/bookings instead
  */
-router.get('/my', authenticateToken, ctrl.getMyBookings);
+router.get('/my', authenticate, ctrl.getMyBookings);
 
 /**
  * @route GET /api/bookings/owner
  * @deprecated Use /api/vendor/bookings instead
  */
-router.get('/owner', authenticateToken, requireRole(['OWNER', 'VENDOR']), ctrl.ownerBookings);
+router.get('/owner', authenticate, requireRole(['OWNER', 'VENDOR']), ctrl.ownerBookings);
 
 /**
  * @route POST /api/bookings/:bookingId/cancel
  * @deprecated Use /api/user/bookings/:bookingId/cancel instead
  */
-router.post('/:bookingId/cancel', authenticateToken, ctrl.cancelBooking);
+router.post('/:bookingId/cancel', authenticate, ctrl.cancelBooking);
 
 module.exports = router;

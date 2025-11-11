@@ -8,11 +8,20 @@ const { sendSuccess, sendError, sendPaginatedResponse } = require('../utils/resp
 const { validateRequiredFields, validateDateRange, isValidRating, validatePagination } = require('../utils/validationHelper');
 const { 
   buildHotelSearchConditions, 
+  buildRoomPriceConditions,
   getHotelIncludes, 
   getBookingIncludes, 
-  getPaginationOffset 
+  getPaginationOffset,
+  calculateBookingAmount
 } = require('../utils/dbHelper');
 const { asyncHandler } = require('../middlewares/errorHandler');
+
+// Helper function to create error
+const createError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
 
 module.exports = {
   // ============ HOTEL BROWSING ============
@@ -162,7 +171,7 @@ module.exports = {
    * Create a new booking
    */
   createBooking: asyncHandler(async (req, res) => {
-    const { hotel_id, room_id, check_in, check_out, guests = 1 } = req.body;
+    const { hotel_id, room_id, check_in, check_out, guests = 1, coupon_code } = req.body;
     
     // Validate required fields
     const validation = validateRequiredFields(req.body, ['hotel_id', 'room_id', 'check_in', 'check_out']);
@@ -189,8 +198,39 @@ module.exports = {
       throw createError('Room not available', 400);
     }
 
-    // Calculate booking amount
-    const { amount, nights } = calculateBookingAmount(room.price, check_in, check_out);
+    // Calculate base booking amount
+    const { amount: baseAmount, nights } = calculateBookingAmount(room.price, check_in, check_out);
+    
+    let finalAmount = baseAmount;
+    let discountAmount = 0;
+    let appliedCouponCode = null;
+
+    // Apply coupon if provided
+    if (coupon_code) {
+      const { Coupon } = require('../models');
+      const { Op, literal } = require('sequelize');
+      const now = new Date();
+      
+      const coupon = await Coupon.findOne({
+        where: {
+          code: coupon_code,
+          active: true,
+          expiry: { [Op.or]: [{ [Op.gt]: now }, null] },
+          used_count: { [Op.lt]: literal('usage_limit') }
+        }
+      });
+
+      if (coupon) {
+        if (coupon.type === 'PERCENT') {
+          discountAmount = (baseAmount * coupon.value) / 100;
+        } else {
+          discountAmount = coupon.value;
+        }
+        discountAmount = Math.min(discountAmount, baseAmount);
+        finalAmount = Math.max(0, baseAmount - discountAmount);
+        appliedCouponCode = coupon.code;
+      }
+    }
 
     // Create booking
     const booking = await Booking.create({
@@ -201,47 +241,63 @@ module.exports = {
       check_in,
       check_out,
       guests,
-      amount,
+      amount: finalAmount,
+      coupon_code: appliedCouponCode,
+      discount_amount: discountAmount,
       status: 'PENDING'
     });
 
     // Update room availability
     await room.update({ available_rooms: room.available_rooms - 1 });
 
-    sendSuccess(res, { booking, amount, nights }, 'Booking created successfully', 201);
+    sendSuccess(res, { 
+      booking, 
+      amount: finalAmount, 
+      base_amount: baseAmount,
+      discount_amount: discountAmount,
+      nights,
+      coupon_applied: appliedCouponCode 
+    }, 'Booking created successfully', 201);
   }),
 
   /**
    * Get user's bookings with pagination
    */
   getMyBookings: asyncHandler(async (req, res) => {
-    const { page, limit } = validatePagination(req.query.page, req.query.limit);
-    const where = { user_id: req.user.id };
+    const { page = 1, limit = 10, status } = req.query;
     
-    if (req.query.status) {
-      where.status = req.query.status;
+    // Validate pagination
+    const paginationValidation = validatePagination(page, limit);
+    if (!paginationValidation.isValid) {
+      throw createError(paginationValidation.message, 400);
     }
 
-    const offset = getPaginationOffset(page, limit);
+    // Build where conditions
+    const where = { user_id: req.user.id };
+    if (status && ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'].includes(status)) {
+      where.status = status;
+    }
 
-    const bookings = await Booking.findAndCountAll({
+    const offset = getPaginationOffset(parseInt(page), parseInt(limit));
+
+    const { count, rows: bookings } = await Booking.findAndCountAll({
       where,
       include: getBookingIncludes(),
-      limit,
-      offset,
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset
     });
 
     const pagination = {
-      page,
-      totalPages: Math.ceil(bookings.count / limit),
-      totalItems: bookings.count,
-      limit,
-      hasNext: page < Math.ceil(bookings.count / limit),
-      hasPrev: page > 1
+      page: parseInt(page),
+      totalPages: Math.ceil(count / parseInt(limit)),
+      totalItems: count,
+      limit: parseInt(limit),
+      hasNext: parseInt(page) < Math.ceil(count / parseInt(limit)),
+      hasPrev: parseInt(page) > 1
     };
 
-    sendPaginatedResponse(res, bookings.rows, pagination, 'Bookings retrieved successfully');
+    sendPaginatedResponse(res, bookings, pagination, 'Bookings retrieved successfully');
   }),
 
   /**
@@ -323,17 +379,17 @@ module.exports = {
       throw createError('Rating must be between 1 and 5', 400);
     }
 
-    // Check if user has a confirmed booking for this hotel
+    // Check if user has a completed booking for this hotel
     const booking = await Booking.findOne({
       where: {
         user_id: req.user.id,
         hotel_id,
-        status: 'CONFIRMED'
+        status: 'COMPLETED'
       }
     });
 
     if (!booking) {
-      throw createError('You can only review hotels you have booked', 403);
+      throw createError('You can only review hotels you have completed bookings for', 403);
     }
 
     // Check if user already reviewed this hotel
@@ -354,6 +410,16 @@ module.exports = {
       rating,
       comment
     });
+
+    // Update hotel rating
+    const hotel = await Hotel.findByPk(hotel_id, {
+      include: [{ model: Review, as: 'reviews' }]
+    });
+    
+    if (hotel && hotel.reviews.length > 0) {
+      const avgRating = hotel.reviews.reduce((sum, review) => sum + review.rating, 0) / hotel.reviews.length;
+      await hotel.update({ rating: Math.round(avgRating * 10) / 10 });
+    }
 
     sendSuccess(res, { review }, 'Review created successfully', 201);
   }),

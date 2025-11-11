@@ -86,3 +86,36 @@ const sendPasswordResetEmail = async (email, resetToken) => {
 };
 
 module.exports = { transporter, sendPasswordResetEmail };
+
+// Send OTP via email
+const sendOtpEmail = async (email, otp, purpose = 'Login OTP') => {
+  const mailOptions = {
+    from: `"Hotel Booking System" <${process.env.SMTP_USER || 'no-reply@example.com'}>`,
+    to: email,
+    subject: `${purpose} - Hotel Booking System`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">${purpose}</h2>
+        <p>Your One-Time Password (OTP) is:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${otp}</div>
+        </div>
+        <p>This code will expire in ${process.env.OTP_EXPIRY_MINUTES || 5} minutes.</p>
+        <p>If you did not request this, you can ignore this email.</p>
+        <hr style="margin: 30px 0;">
+        <p style="color: #666; font-size: 12px;">This is an automated email from Hotel Booking System.</p>
+      </div>
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('OTP email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send OTP email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+module.exports.sendOtpEmail = sendOtpEmail;

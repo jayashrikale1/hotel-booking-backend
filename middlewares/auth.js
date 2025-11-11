@@ -1,34 +1,29 @@
 // middlewares/auth.js
 const jwt = require('jsonwebtoken');
+const { BlacklistedToken } = require('../models');
 const { Admin, User, Vendor } = require('../models');
 require('dotenv').config();
 
-const authenticateToken = async (req, res, next) => {
+const authenticate = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication token is missing' });
+  }
+
+  const blacklisted = await BlacklistedToken.findOne({ where: { token } });
+  if (blacklisted) {
+    return res.status(401).json({ message: 'Token has been invalidated' });
+  }
+
   try {
-    const header = req.headers.authorization || '';
-    const token = header.split(' ')[1];
-    if (!token) return res.status(401).json({ message: 'No token provided' });
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    let user = null;
-    let role = decoded.role;
-
-    // Find user based on role
-    if (role === 'ADMIN') {
-      user = await Admin.findByPk(decoded.id);
-    } else if (role === 'VENDOR') {
-      user = await Vendor.findByPk(decoded.id);
-    } else if (role === 'USER') {
-      user = await User.findByPk(decoded.id);
-    }
-
-    if (!user) return res.status(401).json({ message: 'Invalid token' });
-
-    req.user = { id: user.id, role: role, email: user.email };
+    req.user = decoded; // Attach user payload to request
     next();
   } catch (err) {
-    console.error(err);
-    return res.status(401).json({ message: 'Unauthorized', error: err.message });
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Authentication token has expired' });
+    }
+    return res.status(401).json({ message: 'Invalid authentication token' });
   }
 };
 
@@ -42,4 +37,4 @@ const requireRole = (roles) => {
   };
 };
 
-module.exports = { authenticateToken, requireRole };
+module.exports = { authenticate, requireRole };

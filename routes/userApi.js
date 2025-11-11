@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const userCtrl = require('../controllers/userController');
 const couponCtrl = require('../controllers/couponController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
 /**
  * @swagger
@@ -16,7 +16,7 @@ const userAuthRoutes = require('./userAuth');
 router.use('/auth', userAuthRoutes);
 
 // All user routes require authentication
-router.use(authenticateToken, requireRole(['USER', 'OWNER', 'VENDOR', 'ADMIN']));
+router.use(authenticate, requireRole(['USER', 'OWNER', 'VENDOR', 'ADMIN']));
 
 /**
  * @swagger
@@ -161,43 +161,121 @@ router.get('/rooms/:roomId', userCtrl.getRoomById);
  *             required:
  *               - hotel_id
  *               - room_id
- *               - check_in_date
- *               - check_out_date
- *               - guests
+ *               - check_in
+ *               - check_out
  *             properties:
  *               hotel_id:
  *                 type: integer
+ *                 description: ID of the hotel
  *               room_id:
  *                 type: integer
- *               check_in_date:
+ *                 description: ID of the room
+ *               check_in:
  *                 type: string
  *                 format: date
- *               check_out_date:
+ *                 description: Check-in date (YYYY-MM-DD)
+ *               check_out:
  *                 type: string
  *                 format: date
+ *                 description: Check-out date (YYYY-MM-DD)
  *               guests:
  *                 type: integer
+ *                 default: 1
+ *                 description: Number of guests
+ *               coupon_code:
+ *                 type: string
+ *                 description: Optional coupon code for discount
  *     responses:
  *       201:
  *         description: Booking created successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Booking'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Booking created successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     booking:
+ *                       $ref: '#/components/schemas/Booking'
+ *                     amount:
+ *                       type: number
+ *                       description: Final booking amount after discount
+ *                     base_amount:
+ *                       type: number
+ *                       description: Original booking amount
+ *                     discount_amount:
+ *                       type: number
+ *                       description: Discount applied
+ *                     nights:
+ *                       type: integer
+ *                       description: Number of nights
+ *                     coupon_applied:
+ *                       type: string
+ *                       description: Applied coupon code if any
  *   get:
  *     summary: Get my bookings
  *     tags: [User API]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, CONFIRMED, CANCELLED, COMPLETED]
+ *         description: Filter by booking status
  *     responses:
  *       200:
- *         description: List of user bookings
+ *         description: List of user bookings with pagination
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Booking'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Bookings retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Booking'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalItems:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     hasNext:
+ *                       type: boolean
+ *                     hasPrev:
+ *                       type: boolean
  */
 router.post('/bookings', userCtrl.createBooking);
 router.get('/bookings', userCtrl.getMyBookings);
@@ -250,7 +328,7 @@ router.post('/bookings/:bookingId/cancel', userCtrl.cancelBooking);
  * @swagger
  * /api/user/reviews:
  *   post:
- *     summary: Create a review
+ *     summary: Create a review for a hotel (requires completed booking)
  *     tags: [User API]
  *     security:
  *       - bearerAuth: []
@@ -262,23 +340,43 @@ router.post('/bookings/:bookingId/cancel', userCtrl.cancelBooking);
  *             type: object
  *             required:
  *               - hotel_id
- *               - booking_id
  *               - rating
  *               - comment
  *             properties:
  *               hotel_id:
  *                 type: integer
- *               booking_id:
- *                 type: integer
+ *                 description: ID of the hotel to review
  *               rating:
  *                 type: integer
  *                 minimum: 1
  *                 maximum: 5
+ *                 description: Rating from 1 to 5
  *               comment:
  *                 type: string
+ *                 description: Review comment
  *     responses:
  *       201:
  *         description: Review created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Review created successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     review:
+ *                       $ref: '#/components/schemas/Review'
+ *       403:
+ *         description: User has no completed booking for this hotel
+ *       400:
+ *         description: User has already reviewed this hotel
  *   get:
  *     summary: Get my reviews
  *     tags: [User API]
@@ -290,9 +388,18 @@ router.post('/bookings/:bookingId/cancel', userCtrl.cancelBooking);
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Review'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Reviews retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Review'
  */
 router.post('/reviews', userCtrl.createReview);
 router.get('/reviews', userCtrl.getMyReviews);
@@ -359,7 +466,19 @@ router.delete('/reviews/:reviewId', userCtrl.deleteReview);
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/User'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile retrieved successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
  *   put:
  *     summary: Update user profile
  *     tags: [User API]
@@ -374,11 +493,29 @@ router.delete('/reviews/:reviewId', userCtrl.deleteReview);
  *             properties:
  *               full_name:
  *                 type: string
+ *                 description: User's full name
  *               phone:
  *                 type: string
+ *                 description: User's phone number
  *     responses:
  *       200:
  *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
  */
 router.get('/profile', userCtrl.getProfile);
 router.put('/profile', userCtrl.updateProfile);

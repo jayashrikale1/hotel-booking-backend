@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const vendorCtrl = require('../controllers/vendorController');
 const couponCtrl = require('../controllers/couponController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
 /**
@@ -65,7 +65,7 @@ const vendorAuthRoutes = require('./vendorAuth');
 router.use('/auth', vendorAuthRoutes);
 
 // All vendor routes require OWNER/VENDOR role
-router.use(authenticateToken, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
+router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
 
 
 /**

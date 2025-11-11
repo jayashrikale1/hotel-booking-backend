@@ -1,10 +1,10 @@
 // routes/vendor.js
 const router = require('express').Router();
 const ctrl = require('../controllers/vendorController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
-router.use(authenticateToken, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
+router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
 
 // ============ HOTEL MANAGEMENT ============
 router.post('/hotels', requireRole(['VENDOR']), ctrl.createHotel);

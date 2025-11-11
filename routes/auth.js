@@ -1,7 +1,7 @@
 // routes/auth.js
 const router = require('express').Router();
 const ctrl = require('../controllers/authController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate } = require('../middlewares/auth');
 
 /**
  * @route POST /api/auth/register
@@ -21,7 +21,7 @@ router.post('/forgot', ctrl.forgotPassword);
 /**
  * @route POST /api/auth/change-password
  */
-router.post('/change-password', authenticateToken, ctrl.changePassword);
+router.post('/change-password', authenticate, ctrl.changePassword);
 
 /**
  * @route POST /api/auth/reset-password

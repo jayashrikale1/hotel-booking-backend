@@ -1,7 +1,7 @@
 // routes/adminAuth.js
 const router = require('express').Router();
 const ctrl = require('../controllers/adminAuthController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
 /**
  * @swagger
@@ -212,7 +212,7 @@ router.post('/reset-password', ctrl.resetPassword);
  *       500:
  *         description: Server error
  */
-router.post('/change-password', authenticateToken, requireRole(['ADMIN']), ctrl.changePassword);
+router.post('/change-password', authenticate, requireRole(['ADMIN']), ctrl.changePassword);
 
 /**
  * @swagger
@@ -239,6 +239,6 @@ router.post('/change-password', authenticateToken, requireRole(['ADMIN']), ctrl.
  *       500:
  *         description: Server error
  */
-router.post('/logout', authenticateToken, requireRole(['ADMIN']), ctrl.logout);
+router.post('/logout', authenticate, requireRole(['ADMIN']), ctrl.logout);
 
 module.exports = router;

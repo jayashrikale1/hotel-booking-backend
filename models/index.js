@@ -1,17 +1,19 @@
 // models/index.js
-const Sequelize = require('sequelize');
+const { Sequelize, DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 
-const Admin = require('./admin')(sequelize);
-const User = require('./user')(sequelize);
-const Vendor = require('./vendor')(sequelize);
-const Hotel = require('./hotel')(sequelize);
-const HotelImage = require('./hotelImage')(sequelize);
-const Room = require('./room')(sequelize);
-const Booking = require('./booking')(sequelize);
-const Review = require('./review')(sequelize);
-const Payment = require('./payment')(sequelize);
-const Coupon = require('./coupon')(sequelize);
+const Admin = require('./admin')(sequelize, DataTypes);
+const User = require('./user')(sequelize, DataTypes);
+const Vendor = require('./vendor')(sequelize, DataTypes);
+const Hotel = require('./hotel')(sequelize, DataTypes);
+const HotelImage = require('./hotelImage')(sequelize, DataTypes);
+const Room = require('./room')(sequelize, DataTypes);
+const Booking = require('./booking')(sequelize, DataTypes);
+const Review = require('./review')(sequelize, DataTypes);
+const Payment = require('./payment')(sequelize, DataTypes);
+const Coupon = require('./coupon')(sequelize, DataTypes);
+const UserOtp = require('./userOtp')(sequelize, DataTypes);
+const BlacklistedToken = require('./blacklistedToken')(sequelize, DataTypes);
 
 // Associations
 // Vendor-Hotel relationship (vendors own hotels)
@@ -48,6 +50,10 @@ Booking.belongsTo(Room, { foreignKey: 'room_id', as: 'room' });
 User.hasMany(Review, { foreignKey: 'user_id', as: 'reviews' });
 Review.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// User-OTP relationship
+User.hasMany(UserOtp, { foreignKey: 'user_id', as: 'otps' });
+UserOtp.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 // Hotel-Review relationship
 Hotel.hasMany(Review, { foreignKey: 'hotel_id', as: 'reviews' });
 Review.belongsTo(Hotel, { foreignKey: 'hotel_id', as: 'hotel' });
@@ -69,5 +75,7 @@ module.exports = {
   Booking,
   Review,
   Payment,
-  Coupon
+  Coupon,
+  UserOtp,
+  BlacklistedToken
 };

@@ -8,7 +8,7 @@
 const router = require('express').Router();
 const roomCtrl = require('../controllers/roomController');
 const userCtrl = require('../controllers/userController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
 // ============ PUBLIC ROOM BROWSING ============
 // Public room browsing (no authentication required)
@@ -19,7 +19,7 @@ router.get('/rooms/:roomId', userCtrl.getRoomById);
 // Use role-specific routes instead
 
 // Legacy protected routes
-router.use(authenticateToken);
+router.use(authenticate);
 
 // DEPRECATED: Use /api/vendor/hotels/:hotelId/rooms instead
 router.post('/hotels/:hotelId/rooms', requireRole(['OWNER','VENDOR','ADMIN']), roomCtrl.addRoom);

@@ -1,7 +1,7 @@
 // controllers/vendorAuthController.js
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { Vendor } = require('../models');
+const { Vendor, BlacklistedToken } = require('../models');
 require('dotenv').config();
 
 const generateToken = (vendor) => {
@@ -91,6 +91,18 @@ module.exports = {
       });
     } catch (err) {
       console.error('Vendor login error:', err);
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  // Vendor logout
+  logout: async (req, res) => {
+    try {
+      const token = req.headers.authorization.split(' ')[1];
+      await BlacklistedToken.create({ token });
+      res.json({ message: 'Logout successful' });
+    } catch (err) {
+      console.error('Vendor logout error:', err);
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },

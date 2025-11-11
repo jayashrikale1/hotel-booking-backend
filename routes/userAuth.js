@@ -2,21 +2,17 @@
 const express = require('express');
 const router = express.Router();
 const userAuthController = require('../controllers/userAuthController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
+
+// Classic email/password login removed in favor of OTP flows
 
 /**
  * @swagger
- * tags:
- *   name: User Authentication
- *   description: User authentication and account management
- */
-
-/**
- * @swagger
- * /api/user/auth/register:
+ * /api/user/auth/signup:
  *   post:
+ *     tags:
+ *       - User Authentication
  *     summary: Register a new user
- *     tags: [User Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -24,7 +20,6 @@ const { authenticateToken, requireRole } = require('../middlewares/auth');
  *           schema:
  *             type: object
  *             required:
- *               - full_name
  *               - email
  *               - password
  *             properties:
@@ -32,37 +27,46 @@ const { authenticateToken, requireRole } = require('../middlewares/auth');
  *                 type: string
  *               email:
  *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 minLength: 6
  *               phone:
+ *                 type: string
+ *               password:
  *                 type: string
  *     responses:
  *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *                 token:
- *                   type: string
+ *         description: User registered successfully. Please verify your email with the OTP sent.
  *       400:
- *         description: Bad request - Missing fields or email exists
+ *         description: Bad request
  */
-router.post('/register', userAuthController.register);
+router.post('/signup', userAuthController.signup);
 
 /**
  * @swagger
- * /api/user/auth/login:
+ * /api/user/auth/login-mobile/request-otp:
  *   post:
  *     tags: [User Authentication]
- *     summary: User login
+ *     summary: Request OTP for mobile login
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP sent to mobile
+ */
+router.post('/login-mobile/request-otp', userAuthController.requestMobileLoginOtp);
+
+/**
+ * @swagger
+ * /api/user/auth/login-email/request-otp:
+ *   post:
+ *     tags: [User Authentication]
+ *     summary: Request OTP for email+password login
  *     requestBody:
  *       required: true
  *       content:
@@ -78,24 +82,39 @@ router.post('/register', userAuthController.register);
  *                 type: string
  *     responses:
  *       200:
- *         description: User login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *                 token:
- *                   type: string
- *       401:
- *         description: Invalid user credentials
- *       403:
- *         description: Account suspended
+ *         description: OTP sent to email
  */
-router.post('/login', userAuthController.login);
+router.post('/login-email/request-otp', userAuthController.requestEmailPasswordLoginOtp);
+
+/**
+ * @swagger
+ * /api/user/auth/verify-otp:
+ *   post:
+ *     tags: [User Authentication]
+ *     summary: Verify OTP to complete login
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [channel, otp]
+ *             properties:
+ *               channel:
+ *                 type: string
+ *                 enum: [email, phone]
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful with token
+ */
+router.post('/verify-otp', userAuthController.verifyLoginOtp);
 
 /**
  * @swagger
@@ -153,7 +172,7 @@ router.post('/forgot-password', userAuthController.forgotPassword);
  *       401:
  *         description: Unauthorized
  */
-router.post('/change-password', authenticateToken, requireRole(['USER']), userAuthController.changePassword);
+router.post('/change-password', authenticate, requireRole(['USER']), userAuthController.changePassword);
 
 /**
  * @swagger
@@ -181,5 +200,22 @@ router.post('/change-password', authenticateToken, requireRole(['USER']), userAu
  *         description: Invalid or expired token
  */
 router.post('/reset-password', userAuthController.resetPassword);
+
+/**
+ * @swagger
+ * /api/user/auth/logout:
+ *   post:
+ *     tags: [User Authentication]
+ *     summary: User logout
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ *       401:
+ *         description: Unauthorized
+ */
+// Logout (requires authentication)
+router.post('/logout', authenticate, requireRole(['USER']), userAuthController.logout);
 
 module.exports = router;
