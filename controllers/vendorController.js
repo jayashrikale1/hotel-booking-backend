@@ -450,21 +450,60 @@ updateHotel: asyncHandler(async (req, res) => {
       throw createError('Hotel not found', 404);
     }
 
-    const { type, price, total_rooms, amenities } = req.body;
-    
-    // Validate required fields
-    const validation = validateRequiredFields(req.body, ['type', 'price', 'total_rooms']);
-    if (!validation.isValid) {
-      throw createError(`Missing required fields: ${validation.missingFields.join(', ')}`, 400);
+    const {
+      type,
+      price,
+      total_rooms,
+      amenities,
+      // Alternate field names used in some clients/older swagger
+      room_type,
+      price_per_night,
+      max_occupancy
+    } = req.body;
+
+    // Normalize inputs
+    const normalizedType = (type || room_type || '').toString().trim();
+    const normalizedPriceRaw = price != null ? price : price_per_night;
+    const normalizedPrice = normalizedPriceRaw === '' || normalizedPriceRaw == null
+      ? NaN
+      : parseFloat(normalizedPriceRaw);
+    // total_rooms historically represents how many such rooms exist. If not provided, default to 1.
+    const totalRoomsRaw = total_rooms != null ? total_rooms : undefined;
+    const normalizedTotalRooms = totalRoomsRaw === '' || totalRoomsRaw == null
+      ? 1
+      : parseInt(totalRoomsRaw);
+
+    // Validate required fields (type + price). total_rooms is optional, defaults to 1.
+    if (!normalizedType || Number.isNaN(normalizedPrice)) {
+      const missing = [];
+      if (!normalizedType) missing.push('type');
+      if (Number.isNaN(normalizedPrice)) missing.push('price');
+      throw createError(`Missing required fields: ${missing.join(', ')}`, 400);
+    }
+
+    // Normalize amenities (array or comma-separated string -> JSON array or null)
+    let normalizedAmenities = null;
+    if (Array.isArray(amenities)) {
+      normalizedAmenities = amenities.length ? amenities : null;
+    } else if (typeof amenities === 'string') {
+      const trimmed = amenities.trim();
+      if (trimmed) {
+        if (trimmed.startsWith('[')) {
+          try { const parsed = JSON.parse(trimmed); normalizedAmenities = Array.isArray(parsed) ? parsed : null; }
+          catch { normalizedAmenities = trimmed.split(',').map(s => s.trim()).filter(Boolean); }
+        } else {
+          normalizedAmenities = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      }
     }
 
     const room = await Room.create({
       hotel_id: hotel.id,
-      type,
-      price: parseFloat(price),
-      total_rooms: parseInt(total_rooms),
-      available_rooms: parseInt(total_rooms),
-      amenities: amenities ? JSON.stringify(amenities) : null
+      type: normalizedType,
+      price: Math.max(0, normalizedPrice),
+      total_rooms: Math.max(1, Number.isNaN(normalizedTotalRooms) ? 1 : normalizedTotalRooms),
+      available_rooms: Math.max(1, Number.isNaN(normalizedTotalRooms) ? 1 : normalizedTotalRooms),
+      amenities: normalizedAmenities ? JSON.stringify(normalizedAmenities) : null
     });
 
     sendSuccess(res, { room }, 'Room created successfully', 201);

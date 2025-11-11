@@ -401,21 +401,33 @@ router.delete('/images/:imageId', vendorCtrl.deleteHotelImage);
  *           schema:
  *             type: object
  *             required:
- *               - room_type
- *               - price_per_night
- *               - max_occupancy
+ *               - type
+ *               - price
  *             properties:
+ *               type:
+ *                 type: string
+ *                 description: Room type (e.g., Deluxe, Suite). Alias: room_type
  *               room_type:
  *                 type: string
+ *                 description: Alias for type
+ *               price:
+ *                 type: number
+ *                 format: float
+ *                 description: Price per night. Alias: price_per_night
  *               price_per_night:
  *                 type: number
  *                 format: float
- *               max_occupancy:
+ *                 description: Alias for price
+ *               total_rooms:
  *                 type: integer
+ *                 description: Number of such rooms available (defaults to 1 if omitted)
  *               amenities:
- *                 type: array
- *                 items:
- *                   type: string
+ *                 oneOf:
+ *                   - type: array
+ *                     items:
+ *                       type: string
+ *                   - type: string
+ *                 description: Array or comma-separated string
  *     responses:
  *       201:
  *         description: Room created successfully
