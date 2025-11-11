@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const vendorAuthController = require('../controllers/vendorAuthController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
 /**
  * @swagger
@@ -119,7 +119,7 @@ router.post('/forgot-password', vendorAuthController.forgotPassword);
  *       401:
  *         description: Unauthorized
  */
-router.post('/change-password', authenticateToken, requireRole(['VENDOR']), vendorAuthController.changePassword);
+router.post('/change-password', authenticate, requireRole(['VENDOR']), vendorAuthController.changePassword);
 
 /**
  * @swagger
@@ -147,5 +147,21 @@ router.post('/change-password', authenticateToken, requireRole(['VENDOR']), vend
  *         description: Invalid or expired token
  */
 router.post('/reset-password', vendorAuthController.resetPassword);
+
+/**
+ * @swagger
+ * /api/vendor/auth/logout:
+ *   post:
+ *     tags: [Vendor Authentication]
+ *     summary: Vendor logout
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/logout', authenticate, requireRole(['VENDOR']), vendorAuthController.logout);
 
 module.exports = router;

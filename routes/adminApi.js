@@ -1,7 +1,7 @@
 // routes/adminApi.js - ADMIN ONLY API ENDPOINTS
 const router = require('express').Router();
 const adminCtrl = require('../controllers/adminController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
 // ============ ADMIN AUTHENTICATION API ============
@@ -9,7 +9,7 @@ const adminAuthRoutes = require('./adminAuth');
 router.use('/auth', adminAuthRoutes);
 
 // Authenticate all admin routes
-router.use(authenticateToken);
+router.use(authenticate);
 
 // ============ USER MANAGEMENT API (ADMIN + VENDOR ACCESS) ============
 router.post('/users', requireRole(['ADMIN','VENDOR']), adminCtrl.createUser);

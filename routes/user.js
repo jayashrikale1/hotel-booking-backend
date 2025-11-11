@@ -1,9 +1,9 @@
 // routes/user.js
 const router = require('express').Router();
 const ctrl = require('../controllers/userController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
-router.use(authenticateToken, requireRole(['USER', 'OWNER', 'VENDOR', 'ADMIN']));
+router.use(authenticate, requireRole(['USER', 'OWNER', 'VENDOR', 'ADMIN']));
 
 // ============ HOTEL BROWSING ============
 router.get('/hotels', ctrl.getAllHotels);

@@ -1,9 +1,9 @@
 // routes/admin.js
 const router = require('express').Router();
 const ctrl = require('../controllers/adminController');
-const { authenticateToken, requireRole } = require('../middlewares/auth');
+const { authenticate, requireRole } = require('../middlewares/auth');
 
-router.use(authenticateToken, requireRole(['ADMIN']));
+router.use(authenticate, requireRole(['ADMIN']));
 
 // ============ USER MANAGEMENT ============
 router.post('/users', ctrl.createUser);
