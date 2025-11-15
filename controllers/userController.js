@@ -44,11 +44,24 @@ module.exports = {
           as: 'rooms', 
           where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
           required: false 
-        }
+        },
+        { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
       ],
       limit,
       offset,
       order: [['createdAt', 'DESC']]
+    });
+
+    const sanitize = (url) => {
+      if (!url) return null;
+      if (url.includes('/src/assets/')) return null;
+      return url.startsWith('/uploads/') ? url : null;
+    };
+
+    const rows = hotels.rows.map(h => {
+      const imgs = (h.images || []).filter(img => sanitize(img.url));
+      h.images = imgs;
+      return h;
     });
 
     const pagination = {
@@ -60,7 +73,7 @@ module.exports = {
       hasPrev: page > 1
     };
 
-    sendPaginatedResponse(res, hotels.rows, pagination, 'Hotels retrieved successfully');
+    sendPaginatedResponse(res, rows, pagination, 'Hotels retrieved successfully');
   }),
 
   /**
@@ -85,6 +98,7 @@ module.exports = {
       throw createError('Hotel not found', 404);
     }
 
+    hotel.images = (hotel.images || []).filter(img => img.url && img.url.startsWith('/uploads/') && !img.url.includes('/src/assets/'));
     sendSuccess(res, { hotel }, 'Hotel details retrieved successfully');
   }),
 
@@ -101,12 +115,41 @@ module.exports = {
       where,
       include: [
         { model: HotelImage, as: 'images' },
-        { model: Room, as: 'rooms', where: roomWhere, required: true }
+        { 
+          model: Room, 
+          as: 'rooms', 
+          where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
+          required: Object.keys(roomWhere).length > 0
+        },
+        { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
       ],
       limit,
       offset,
       order: [['createdAt', 'DESC']]
     });
+
+    if (hotels.count === 0 && !req.query.status) {
+      const relaxedWhere = { ...where };
+      delete relaxedWhere.status;
+      const retry = await Hotel.findAndCountAll({
+        where: relaxedWhere,
+        include: [
+          { model: HotelImage, as: 'images' },
+          { 
+            model: Room, 
+            as: 'rooms', 
+            where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
+            required: Object.keys(roomWhere).length > 0
+          },
+          { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
+        ],
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']]
+      });
+      hotels.count = retry.count;
+      hotels.rows = retry.rows;
+    }
 
     const pagination = {
       page,
@@ -117,7 +160,11 @@ module.exports = {
       hasPrev: page > 1
     };
 
-    sendPaginatedResponse(res, hotels.rows, pagination, 'Search results retrieved successfully');
+    const rows = hotels.rows.map(h => {
+      h.images = (h.images || []).filter(img => img.url && img.url.startsWith('/uploads/') && !img.url.includes('/src/assets/'));
+      return h;
+    });
+    sendPaginatedResponse(res, rows, pagination, 'Search results retrieved successfully');
   }),
 
   // ============ ROOM BROWSING ============
@@ -493,9 +540,20 @@ module.exports = {
    * Get user profile
    */
   getProfile: asyncHandler(async (req, res) => {
-    const user = await User.findByPk(req.user.id, {
-      attributes: ['id', 'full_name', 'email', 'phone', 'is_verified', 'createdAt']
-    });
+    let user;
+    try {
+      user = await User.findByPk(req.user.id, {
+        attributes: ['id', 'full_name', 'email', 'phone', 'address', 'profile_photo', 'is_verified', 'createdAt']
+      });
+    } catch (err) {
+      if (/Unknown column 'profile_photo'/i.test(err.message)) {
+        user = await User.findByPk(req.user.id, {
+          attributes: ['id', 'full_name', 'email', 'phone', 'address', 'is_verified', 'createdAt']
+        });
+      } else {
+        throw err;
+      }
+    }
 
     if (!user) {
       throw createError('User not found', 404);
@@ -514,13 +572,36 @@ module.exports = {
       throw createError('User not found', 404);
     }
 
-    const { full_name, phone } = req.body;
+    // Accept common alias keys from frontend forms
+    const {
+      full_name,
+      fullName,
+      phone,
+      phone_number,
+      mobile,
+      address
+    } = req.body || {};
     const updateData = {};
     
-    if (full_name) updateData.full_name = full_name;
-    if (phone) updateData.phone = phone;
+    if (full_name || fullName) updateData.full_name = (full_name || fullName).trim();
+    if (phone || phone_number || mobile) updateData.phone = (phone || phone_number || mobile).trim();
+    if (address) updateData.address = String(address).trim();
+    if (req.file && req.file.filename) updateData.profile_photo = req.file.filename;
+    
+    if (Object.keys(updateData).length === 0) {
+      return sendError(res, 'No profile fields provided to update', 400);
+    }
 
-    await user.update(updateData);
+    try {
+      await user.update(updateData);
+    } catch (err) {
+      if (/Unknown column 'profile_photo'/i.test(err.message)) {
+        delete updateData.profile_photo;
+        await user.update(updateData);
+      } else {
+        throw err;
+      }
+    }
     sendSuccess(res, { user }, 'Profile updated successfully');
   })
 };

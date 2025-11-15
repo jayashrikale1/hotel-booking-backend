@@ -3,6 +3,7 @@ const router = require('express').Router();
 const userCtrl = require('../controllers/userController');
 const couponCtrl = require('../controllers/couponController');
 const { authenticate, requireRole } = require('../middlewares/auth');
+const upload = require('../middlewares/upload');
 
 /**
  * @swagger
@@ -487,7 +488,7 @@ router.delete('/reviews/:reviewId', userCtrl.deleteReview);
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -497,6 +498,13 @@ router.delete('/reviews/:reviewId', userCtrl.deleteReview);
  *               phone:
  *                 type: string
  *                 description: User's phone number
+ *               address:
+ *                 type: string
+ *                 description: User's address
+ *               profile_photo:
+ *                 type: string
+ *                 format: binary
+ *                 description: Profile photo image file
  *     responses:
  *       200:
  *         description: Profile updated successfully
@@ -518,7 +526,7 @@ router.delete('/reviews/:reviewId', userCtrl.deleteReview);
  *                       $ref: '#/components/schemas/User'
  */
 router.get('/profile', userCtrl.getProfile);
-router.put('/profile', userCtrl.updateProfile);
+router.put('/profile', upload.single('profile_photo'), userCtrl.updateProfile);
 
 /**
  * @swagger

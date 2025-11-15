@@ -1,6 +1,7 @@
 // server.js
 const app = require('./app');
 const { sequelize } = require('./models');
+const { DataTypes } = require('sequelize');
 
 const PORT = process.env.PORT || 3001;
 
@@ -9,9 +10,26 @@ const PORT = process.env.PORT || 3001;
     await sequelize.authenticate();
     console.log('DB connected');
 
-    // ✅ Stop Sequelize from altering tables on every start
-    // This prevents duplicate keys like code_2, code_3, etc.
-    await sequelize.sync({ alter: false, force: false });
+    // ✅ Controlled sync: enable ALTER via env only when needed
+    const alter = String(process.env.DB_SYNC_ALTER || 'false').toLowerCase() === 'true';
+    const force = String(process.env.DB_SYNC_FORCE || 'false').toLowerCase() === 'true';
+    // Self-healing: ensure users.profile_photo exists before syncing
+    try {
+      const qi = sequelize.getQueryInterface();
+      const table = await qi.describeTable('users');
+      if (!table.profile_photo) {
+        console.log('Adding missing column users.profile_photo');
+        await qi.addColumn('users', 'profile_photo', {
+          type: DataTypes.STRING,
+          allowNull: true,
+          after: 'address'
+        });
+      }
+    } catch (e) {
+      // Ignore describe/add errors; sync alter will attempt to fix
+      console.warn('Schema check warning:', e.message);
+    }
+    await sequelize.sync({ alter, force });
 
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (err) {

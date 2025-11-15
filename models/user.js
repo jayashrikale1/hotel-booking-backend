@@ -9,6 +9,7 @@ module.exports = (sequelize) => {
     phone: { type: DataTypes.STRING, allowNull: true },
     password: { type: DataTypes.STRING, allowNull: false },
     address: { type: DataTypes.TEXT, allowNull: true },
+    profile_photo: { type: DataTypes.STRING, allowNull: true },
     date_of_birth: { type: DataTypes.DATE, allowNull: true },
     is_verified: { type: DataTypes.BOOLEAN, defaultValue: false },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },

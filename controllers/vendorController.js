@@ -46,6 +46,14 @@ createHotel: asyncHandler(async (req, res) => {
     total_rooms, available_rooms, base_price, featured
   } = req.body;
 
+  const vendor = await Vendor.findByPk(req.user.id);
+  if (!vendor) {
+    throw createError('Vendor not found', 404);
+  }
+  if (vendor.status !== 'ACTIVE') {
+    throw createError('Vendor account is not active', 403);
+  }
+
   // Validate required fields
   const validation = validateRequiredFields(req.body, ['name', 'address', 'city']);
   if (!validation.isValid) {
@@ -127,6 +135,11 @@ createHotel: asyncHandler(async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
+    const rows = hotels.rows.map(h => {
+      h.images = (h.images || []).filter(img => img.url && img.url.startsWith('/uploads/') && !img.url.includes('/src/assets/'));
+      return h;
+    });
+
     const pagination = {
       page,
       totalPages: Math.ceil(hotels.count / limit),
@@ -136,7 +149,7 @@ createHotel: asyncHandler(async (req, res) => {
       hasPrev: page > 1
     };
 
-    sendPaginatedResponse(res, hotels.rows, pagination, 'Hotels retrieved successfully');
+    sendPaginatedResponse(res, rows, pagination, 'Hotels retrieved successfully');
   }),
 
 
@@ -145,15 +158,20 @@ createHotel: asyncHandler(async (req, res) => {
  */
 getAllHotelsPublic: asyncHandler(async (req, res) => {
   try {
-    const { city, state, country } = req.query; // Optional filters
-    const where = { status: 'APPROVED' };
+    const { city, state, country, status } = req.query; // Optional filters
+    const where = {};
+    if (!status || status === 'APPROVED') {
+      where.status = 'APPROVED';
+    } else if (status !== 'ALL') {
+      where.status = status;
+    }
 
     // Apply filters if provided
     if (city) where.city = { [Op.like]: `%${city}%` };
     if (state) where.state = { [Op.like]: `%${state}%` };
     if (country) where.country = { [Op.like]: `%${country}%` };
 
-    const hotels = await Hotel.findAll({
+    let hotels = await Hotel.findAll({
       where,
       include: [
         {
@@ -175,7 +193,25 @@ getAllHotelsPublic: asyncHandler(async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    sendSuccess(res, { hotels }, 'Hotels retrieved successfully');
+    if ((!status || status === 'APPROVED') && hotels.length === 0) {
+      const whereNoStatus = { ...where };
+      delete whereNoStatus.status;
+      hotels = await Hotel.findAll({
+        where: whereNoStatus,
+        include: [
+          { model: HotelImage, as: 'images', attributes: ['id', 'url'] },
+          { model: Room, as: 'rooms', attributes: ['id', 'type', 'price', 'available_rooms'] },
+          { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name', 'phone', 'business_address'] }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+    }
+
+    const clean = hotels.map(h => {
+      h.images = (h.images || []).filter(img => img.url && img.url.startsWith('/uploads/') && !img.url.includes('/src/assets/'));
+      return h;
+    });
+    sendSuccess(res, { hotels: clean }, 'Hotels retrieved successfully');
   } catch (error) {
     console.error('Error fetching hotels:', error);
     sendError(res, 'Failed to retrieve hotels');

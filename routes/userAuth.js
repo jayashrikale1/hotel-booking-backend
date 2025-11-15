@@ -2,7 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const userAuthController = require('../controllers/userAuthController');
+const userController = require('../controllers/userController');
 const { authenticate, requireRole } = require('../middlewares/auth');
+const upload = require('../middlewares/upload');
 
 // Classic email/password login removed in favor of OTP flows
 
@@ -16,11 +18,13 @@ const { authenticate, requireRole } = require('../middlewares/auth');
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
+ *               - full_name
  *               - email
+ *               - phone
  *               - password
  *             properties:
  *               full_name:
@@ -31,13 +35,19 @@ const { authenticate, requireRole } = require('../middlewares/auth');
  *                 type: string
  *               password:
  *                 type: string
+ *               address:
+ *                 type: string
+ *               profile_photo:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       201:
  *         description: User registered successfully. Please verify your email with the OTP sent.
  *       400:
  *         description: Bad request
  */
-router.post('/signup', userAuthController.signup);
+// Accept optional profile photo upload at signup
+router.post('/signup', upload.single('profile_photo'), userAuthController.signup);
 
 /**
  * @swagger
@@ -63,49 +73,44 @@ router.post('/login-mobile/request-otp', userAuthController.requestMobileLoginOt
 
 /**
  * @swagger
- * /api/user/auth/login-email/request-otp:
+ * /api/user/auth/login-mobile:
  *   post:
  *     tags: [User Authentication]
- *     summary: Request OTP for email+password login
+ *     summary: Login with mobile number and password (no OTP)
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password]
+ *             required: [phone, password]
  *             properties:
- *               email:
+ *               phone:
  *                 type: string
- *                 format: email
  *               password:
  *                 type: string
  *     responses:
  *       200:
- *         description: OTP sent to email
+ *         description: Login successful with token
+ *       401:
+ *         description: Invalid credentials
  */
-router.post('/login-email/request-otp', userAuthController.requestEmailPasswordLoginOtp);
+router.post('/login-mobile', userAuthController.loginWithMobilePassword);
 
 /**
  * @swagger
  * /api/user/auth/verify-otp:
  *   post:
  *     tags: [User Authentication]
- *     summary: Verify OTP to complete login
+ *     summary: Verify mobile OTP to complete login
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [channel, otp]
+ *             required: [phone, otp]
  *             properties:
- *               channel:
- *                 type: string
- *                 enum: [email, phone]
- *               email:
- *                 type: string
- *                 format: email
  *               phone:
  *                 type: string
  *               otp:
@@ -118,7 +123,7 @@ router.post('/verify-otp', userAuthController.verifyLoginOtp);
 
 /**
  * @swagger
- * /api/user/auth/forgot:
+ * /api/user/auth/forgot-password:
  *   post:
  *     tags: [User Authentication]
  *     summary: User forgot password
@@ -172,7 +177,7 @@ router.post('/forgot-password', userAuthController.forgotPassword);
  *       401:
  *         description: Unauthorized
  */
-router.post('/change-password', authenticate, requireRole(['USER']), userAuthController.changePassword);
+router.post('/change-password', authenticate, requireRole(['USER']), upload.none(), userAuthController.changePassword);
 
 /**
  * @swagger
@@ -200,6 +205,10 @@ router.post('/change-password', authenticate, requireRole(['USER']), userAuthCon
  *         description: Invalid or expired token
  */
 router.post('/reset-password', userAuthController.resetPassword);
+
+router.get('/profile', authenticate, requireRole(['USER']), userController.getProfile);
+router.put('/profile', authenticate, requireRole(['USER']), upload.single('profile_photo'), userController.updateProfile);
+
 
 /**
  * @swagger

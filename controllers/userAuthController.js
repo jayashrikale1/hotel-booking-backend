@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User, UserOtp, BlacklistedToken } = require('../models');
 const { generateNumericOtp, hashOtp, verifyOtp, getExpiry } = require('../utils/otpHelper');
-const { sendOtpEmail } = require('../utils/mailer');
+// const { sendOtpEmail } = require('../utils/mailer');
 const { sendOtpSms } = require('../utils/sms');
 require('dotenv').config();
 
@@ -15,43 +15,53 @@ module.exports = {
   // User signup
   signup: async (req, res) => {
     try {
-      const { full_name, email, phone, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+      const { full_name, fullName, email, phone, password, address } = req.body || {};
+      const name = (full_name || fullName || '').trim();
+      if (!name || !email || !phone || !password) {
+        return res.status(400).json({ message: 'Full name, email, phone, and password are required' });
       }
 
-      const existingUser = await User.findOne({ where: { email } });
-      if (existingUser) {
+      // Ensure unique email
+      const existingByEmail = await User.findOne({ where: { email } });
+      if (existingByEmail) {
         return res.status(400).json({ message: 'Email is already registered' });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = await User.create({
-        full_name,
-        email,
-        phone,
-        password: hashedPassword,
-        is_active: false, // User is inactive until OTP verification
-      });
-
-      const otp = generateNumericOtp();
-      const codeHash = await hashOtp(otp);
-      const expiresAt = getExpiry();
-
-      await UserOtp.create({
-        user_id: newUser.id,
-        channel: 'email',
-        destination: email,
-        code_hash: codeHash,
-        expires_at: expiresAt,
-      });
-
-      const emailResult = await sendOtpEmail(email, otp, 'Account Verification OTP');
-      if (!emailResult.success) {
-        return res.status(500).json({ message: 'Failed to send verification OTP', error: emailResult.error });
+      // Ensure unique phone (if provided)
+      const existingByPhone = await User.findOne({ where: { phone } });
+      if (existingByPhone) {
+        return res.status(400).json({ message: 'Mobile number is already registered' });
       }
 
-      res.status(201).json({ message: 'User registered successfully. Please verify your email with the OTP sent.' });
+      const hashedPassword = await bcrypt.hash(password, 10);
+      let newUser;
+      try {
+        newUser = await User.create({
+          full_name: name,
+          email,
+          phone,
+          password: hashedPassword,
+          address: address ? String(address).trim() : null,
+          profile_photo: req.file ? req.file.filename : null,
+          // Keep account active upon signup; OTP is only for OTP login flow
+          is_active: true,
+        });
+      } catch (err) {
+        if (/Unknown column 'profile_photo'/i.test(err.message)) {
+          newUser = await User.create({
+            full_name: name,
+            email,
+            phone,
+            password: hashedPassword,
+            address: address ? String(address).trim() : null,
+            is_active: true,
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      res.status(201).json({ message: 'User registered successfully', user: { id: newUser.id, full_name: newUser.full_name, email: newUser.email, phone: newUser.phone, address: newUser.address, profile_photo: newUser.profile_photo } });
     } catch (err) {
       console.error('User signup error:', err);
       res.status(500).json({ message: 'Server error', error: err.message });
@@ -98,15 +108,17 @@ module.exports = {
     }
   },
 
-  // Request OTP for email+password login
-  requestEmailPasswordLoginOtp: async (req, res) => {
+  // Removed: email+password OTP login (not required per current spec)
+
+  // Direct login with mobile number and password (no OTP)
+  loginWithMobilePassword: async (req, res) => {
     try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+      const { phone, password } = req.body;
+      if (!phone || !password) {
+        return res.status(400).json({ message: 'Phone and password are required' });
       }
 
-      const user = await User.findOne({ where: { email } });
+      const user = await User.findOne({ where: { phone } });
       if (!user) {
         return res.status(401).json({ message: 'Invalid user credentials' });
       }
@@ -119,61 +131,38 @@ module.exports = {
         return res.status(401).json({ message: 'Invalid user credentials' });
       }
 
-      const otp = generateNumericOtp();
-      const codeHash = await hashOtp(otp);
-      const expiresAt = getExpiry();
+      user.last_login = new Date();
+      await user.save();
 
-      await UserOtp.create({
-        user_id: user.id,
-        channel: 'email',
-        destination: email,
-        code_hash: codeHash,
-        expires_at: expiresAt,
+      const token = generateToken(user);
+      return res.json({
+        message: 'Login successful',
+        user: { id: user.id, full_name: user.full_name, email: user.email, phone: user.phone, role: 'USER' },
+        token,
       });
-
-      const emailResult = await sendOtpEmail(email, otp, 'Login OTP');
-      if (!emailResult.success) {
-        return res.status(500).json({ message: 'Failed to send OTP email', error: emailResult.error });
-      }
-
-      res.json({ message: 'OTP sent to email' });
     } catch (err) {
-      console.error('Request email+password OTP error:', err);
+      console.error('Mobile+password login error:', err);
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // Verify OTP for login (email or phone)
+  // Verify OTP for login (phone only)
   verifyLoginOtp: async (req, res) => {
     try {
-      const { channel, email, phone, otp } = req.body;
-      if (!otp || !channel || !['email', 'phone'].includes(channel)) {
-        return res.status(400).json({ message: 'Channel (email|phone) and otp are required' });
+      const { phone, otp } = req.body;
+      if (!phone || !otp) {
+        return res.status(400).json({ message: 'Phone and otp are required' });
       }
 
-      let user;
-      let destination;
-      if (channel === 'email') {
-        if (!email) return res.status(400).json({ message: 'Email is required' });
-        user = await User.findOne({ where: { email } });
-        destination = email;
-      } else {
-        if (!phone) return res.status(400).json({ message: 'Phone is required' });
-        user = await User.findOne({ where: { phone } });
-        destination = phone;
-      }
+      const user = await User.findOne({ where: { phone } });
+      const destination = phone;
 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // If user is inactive, this is a signup verification
-      const isSignupVerification = !user.is_active;
-
-      if (user.is_active === false) {
-        // Activate user if this is a signup verification
-        user.is_active = true;
-      } else if (!user.is_active) {
+      // Account must be active to allow login (signup verification via email removed)
+      if (!user.is_active) {
         return res.status(403).json({ message: 'Account has been deactivated' });
       }
 
@@ -181,7 +170,7 @@ module.exports = {
       const otpRecord = await UserOtp.findOne({
         where: {
           user_id: user.id,
-          channel,
+          channel: 'phone',
           destination,
           consumed: false,
         },
@@ -214,10 +203,8 @@ module.exports = {
       await user.save();
 
       const token = generateToken(user);
-      const responseMessage = isSignupVerification ? 'Account activated successfully' : 'Login successful';
-
       res.json({
-        message: responseMessage,
+        message: 'Login successful',
         user: { id: user.id, full_name: user.full_name, email: user.email, role: 'USER' },
         token
       });
@@ -231,10 +218,26 @@ module.exports = {
   changePassword: async (req, res) => {
     try {
       const userId = req.user.id;
-      const { old_password, new_password } = req.body;
+      const {
+        old_password,
+        new_password,
+        oldPassword,
+        newPassword,
+        current_password,
+        currentPassword
+      } = req.body || {};
 
-      if (!old_password || !new_password) {
+      const oldPwd = (old_password || oldPassword || current_password || currentPassword || '').trim();
+      const newPwd = (new_password || newPassword || '').trim();
+
+      if (!oldPwd || !newPwd) {
         return res.status(400).json({ message: 'Old password and new password are required' });
+      }
+      if (newPwd.length < 6) {
+        return res.status(400).json({ message: 'New password must be at least 6 characters' });
+      }
+      if (oldPwd === newPwd) {
+        return res.status(400).json({ message: 'New password cannot be same as old password' });
       }
 
       const user = await User.findOne({ where: { id: userId } });
@@ -242,12 +245,12 @@ module.exports = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      const matched = await bcrypt.compare(old_password, user.password);
+      const matched = await bcrypt.compare(oldPwd, user.password);
       if (!matched) {
         return res.status(400).json({ message: 'Current password is incorrect' });
       }
 
-      const hash = await bcrypt.hash(new_password, 10);
+      const hash = await bcrypt.hash(newPwd, 10);
       user.password = hash;
       await user.save();
 

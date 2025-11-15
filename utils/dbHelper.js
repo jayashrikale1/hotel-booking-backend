@@ -12,21 +12,25 @@ const { Op } = require('sequelize');
  */
 const buildHotelSearchConditions = (query) => {
   const { city, destination, name, status = 'APPROVED' } = query;
-  const where = { status };
+  const where = {};
+
+  if (status && status !== 'ALL') {
+    where.status = status;
+  }
 
   if (city) {
-    where.city = { [Op.iLike]: `%${city}%` };
+    where.city = { [Op.like]: `%${city}%` };
   }
 
   if (name) {
-    where.name = { [Op.iLike]: `%${name}%` };
+    where.name = { [Op.like]: `%${name}%` };
   }
 
   if (destination) {
     where[Op.or] = [
-      { city: { [Op.iLike]: `%${destination}%` } },
-      { name: { [Op.iLike]: `%${destination}%` } },
-      { address: { [Op.iLike]: `%${destination}%` } }
+      { city: { [Op.like]: `%${destination}%` } },
+      { name: { [Op.like]: `%${destination}%` } },
+      { address: { [Op.like]: `%${destination}%` } }
     ];
   }
 

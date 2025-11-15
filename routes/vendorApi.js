@@ -406,14 +406,14 @@ router.delete('/images/:imageId', vendorCtrl.deleteHotelImage);
  *             properties:
  *               type:
  *                 type: string
- *                 description: Room type (e.g., Deluxe, Suite). Alias: room_type
+ *                 description: "Room type (e.g., Deluxe, Suite). Alias: room_type"
  *               room_type:
  *                 type: string
  *                 description: Alias for type
  *               price:
  *                 type: number
  *                 format: float
- *                 description: Price per night. Alias: price_per_night
+ *                 description: "Price per night. Alias: price_per_night"
  *               price_per_night:
  *                 type: number
  *                 format: float

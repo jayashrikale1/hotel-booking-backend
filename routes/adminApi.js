@@ -290,12 +290,12 @@ router.post('/vendors/:vendorId/activate', adminCtrl.activateVendor);
 router.post('/vendors/:vendorId/deactivate', adminCtrl.deactivateVendor);
 
 // ============ HOTEL MANAGEMENT API ============
-router.get('/hotels', adminCtrl.getAllHotels);
-router.get('/hotels/:hotelId', adminCtrl.getHotelById);
-router.put('/hotels/:hotelId', adminCtrl.updateHotel);
-router.delete('/hotels/:hotelId', adminCtrl.deleteHotel);
-router.post('/hotels/:hotelId/approve', adminCtrl.approveHotel);
-router.post('/hotels/:hotelId/reject', adminCtrl.rejectHotel);
+router.get('/hotels', requireRole(['ADMIN']), adminCtrl.getAllHotels);
+router.get('/hotels/:hotelId', requireRole(['ADMIN']), adminCtrl.getHotelById);
+router.put('/hotels/:hotelId', requireRole(['ADMIN']), adminCtrl.updateHotel);
+router.delete('/hotels/:hotelId', requireRole(['ADMIN']), adminCtrl.deleteHotel);
+router.post('/hotels/:hotelId/approve', requireRole(['ADMIN']), adminCtrl.approveHotel);
+router.post('/hotels/:hotelId/reject', requireRole(['ADMIN']), adminCtrl.rejectHotel);
 
 // ============ ROOM MANAGEMENT API ============
 router.get('/rooms', adminCtrl.getAllRooms);
