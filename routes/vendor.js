@@ -17,14 +17,6 @@ router.delete('/hotels/:hotelId', ctrl.deleteHotel);
 router.post('/hotels/:hotelId/images', upload.array('images', 10), ctrl.uploadHotelImages);
 router.delete('/images/:imageId', ctrl.deleteHotelImage);
 
-// ============ ROOM MANAGEMENT ============
-router.post('/hotels/:hotelId/rooms', ctrl.createRoom);
-router.get('/hotels/:hotelId/rooms', ctrl.getMyRooms);
-router.get('/rooms', ctrl.getAllMyRooms);
-router.get('/rooms/:roomId', ctrl.getRoomById);
-router.put('/rooms/:roomId', ctrl.updateRoom);
-router.delete('/rooms/:roomId', ctrl.deleteRoom);
-
 // ============ BOOKING MANAGEMENT ============
 router.get('/bookings', ctrl.getMyBookings);
 router.get('/bookings/:bookingId', ctrl.getBookingById);

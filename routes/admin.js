@@ -35,10 +35,10 @@ router.put('/bookings/:bookingId', ctrl.updateBooking);
 router.post('/bookings/:bookingId/cancel', ctrl.cancelBooking);
 
 // ============ ROOM MANAGEMENT ============
-router.get('/rooms', ctrl.getAllRooms);
-router.get('/rooms/:roomId', ctrl.getRoomById);
-router.put('/rooms/:roomId', ctrl.updateRoom);
-router.delete('/rooms/:roomId', ctrl.deleteRoom);
+// router.get('/rooms', ctrl.getAllRooms);
+// router.get('/rooms/:roomId', ctrl.getRoomById);
+// router.put('/rooms/:roomId', ctrl.updateRoom);
+// router.delete('/rooms/:roomId', ctrl.deleteRoom);
 
 // ============ DASHBOARD ============
 router.get('/dashboard/stats', ctrl.getDashboardStats);

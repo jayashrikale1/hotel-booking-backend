@@ -60,6 +60,36 @@ router.get('/public/hotels', vendorCtrl.getAllHotelsPublic);
 
 
 
+/**
+ * @swagger
+ * /api/vendor/public/hotels/{hotelId}:
+ *   get:
+ *     summary: Get hotel by ID (public)
+ *     tags: [Public]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Hotel details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     hotel:
+ *                       $ref: '#/components/schemas/Hotel'
+ */
+router.get('/public/hotels/:hotelId', vendorCtrl.getHotelByIdPublic);
+
+
 // ============ VENDOR AUTHENTICATION API ============
 const vendorAuthRoutes = require('./vendorAuth');
 router.use('/auth', vendorAuthRoutes);
@@ -114,6 +144,10 @@ router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
  *                 type: number
  *                 format: float
  *                 example: 72.8777
+ *               map_url:
+ *                 type: string
+ *                 format: uri
+ *                 example: "https://maps.google.com/?q=19.0760,72.8777"
  *               amenities:
  *                 description: List of amenities (array or comma-separated string)
  *                 oneOf:
@@ -123,6 +157,15 @@ router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
  *                     example: ["WiFi","Pool","Gym","Spa","Restaurant","Parking"]
  *                   - type: string
  *                     example: "WiFi, Pool, Gym, Spa, Restaurant, Parking"
+ *               hotel_features:
+ *                 description: Key features of the hotel (array or comma-separated string)
+ *                 oneOf:
+ *                   - type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["Sea View","Airport Shuttle","Pet Friendly"]
+ *                   - type: string
+ *                     example: "Sea View, Airport Shuttle, Pet Friendly"
  *               phone:
  *                 type: string
  *                 example: "+91-22-12345678"
@@ -140,10 +183,36 @@ router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
  *               available_rooms:
  *                 type: integer
  *                 example: 50
+ *               ac_rooms:
+ *                 type: integer
+ *                 example: 25
+ *               non_ac_rooms:
+ *                 type: integer
+ *                 example: 25
  *               base_price:
  *                 type: number
  *                 format: float
  *                 example: 2499.00
+ *               ac_room_price:
+ *                 type: number
+ *                 format: float
+ *                 example: 3499.00
+ *               non_ac_room_price:
+ *                 type: number
+ *                 format: float
+ *                 example: 2499.00
+ *               check_in_time:
+ *                 type: string
+ *                 example: "12:00 PM"
+ *               check_out_time:
+ *                 type: string
+ *                 example: "11:00 AM"
+ *               cancellation_policy:
+ *                 type: string
+ *                 example: "Free cancellation up to 24 hours before check-in"
+ *               gst_number:
+ *                 type: string
+ *                 example: "27AAAAA0000A1Z5"
  *               featured:
  *                 type: boolean
  *                 example: false
@@ -158,6 +227,24 @@ router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
  *     responses:
  *       200:
  *         description: List of vendor hotels
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Hotel'
+ *                     pagination:
+ *                       type: object
  */
 router.post('/hotels', requireRole(['VENDOR']), vendorCtrl.createHotel);
 router.get('/hotels', requireRole(['VENDOR']), vendorCtrl.getMyHotels);
@@ -180,6 +267,20 @@ router.get('/hotels', requireRole(['VENDOR']), vendorCtrl.getMyHotels);
  *     responses:
  *       200:
  *         description: Hotel details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     hotel:
+ *                       $ref: '#/components/schemas/Hotel'
  *   put:
  *     summary: Update hotel details
  *     tags: [Vendor API]
@@ -238,6 +339,15 @@ router.get('/hotels', requireRole(['VENDOR']), vendorCtrl.getMyHotels);
  *                     example: ["WiFi","Pool","Gym","Spa","Restaurant","Parking","Conference Room"]
  *                   - type: string
  *                     example: "WiFi, Pool, Gym, Spa, Restaurant, Parking, Conference Room"
+ *               hotel_features:
+ *                 description: Key features of the hotel (array or comma-separated string)
+ *                 oneOf:
+ *                   - type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["Sea View","Airport Shuttle","Pet Friendly"]
+ *                   - type: string
+ *                     example: "Sea View, Airport Shuttle, Pet Friendly"
  *               phone:
  *                 type: string
  *                 example: "+91-22-12345678"
@@ -255,14 +365,40 @@ router.get('/hotels', requireRole(['VENDOR']), vendorCtrl.getMyHotels);
  *               available_rooms:
  *                 type: integer
  *                 example: 48
+ *               ac_rooms:
+ *                 type: integer
+ *                 example: 28
+ *               non_ac_rooms:
+ *                 type: integer
+ *                 example: 27
  *               base_price:
  *                 type: number
  *                 format: float
  *                 example: 2699.00
+ *               ac_room_price:
+ *                 type: number
+ *                 format: float
+ *                 example: 3699.00
+ *               non_ac_room_price:
+ *                 type: number
+ *                 format: float
+ *                 example: 2699.00
+ *               check_in_time:
+ *                 type: string
+ *                 example: "12:00 PM"
+ *               check_out_time:
+ *                 type: string
+ *                 example: "11:00 AM"
+ *               cancellation_policy:
+ *                 type: string
+ *                 example: "Free cancellation up to 48 hours before check-in"
+ *               gst_number:
+ *                 type: string
+ *                 example: "27AAAAA0000A1Z5"
  *               featured:
  *                 type: boolean
  *                 example: false
- *           example:
+ *             example:
  *             name: Grand Plaza Hotel - Renovated
  *             description: A luxurious 5-star hotel in the heart of the city with newly renovated facilities
  *             address: 123 Main Street
@@ -272,13 +408,23 @@ router.get('/hotels', requireRole(['VENDOR']), vendorCtrl.getMyHotels);
  *             pincode: "400001"
  *             latitude: 19.0760
  *             longitude: 72.8777
+ *             map_url: "https://maps.google.com/?q=19.0760,72.8777"
  *             amenities: ["WiFi","Pool","Gym","Spa","Restaurant","Parking","Conference Room"]
+ *             hotel_features: ["Sea View","Airport Shuttle","Pet Friendly"]
  *             phone: "+91-22-12345678"
  *             email: contact@grandplaza.com
  *             rating: 4.7
  *             total_rooms: 55
  *             available_rooms: 48
+ *             ac_rooms: 28
+ *             non_ac_rooms: 27
  *             base_price: 2699.00
+ *             ac_room_price: 3699.00
+ *             non_ac_room_price: 2699.00
+ *             check_in_time: "12:00 PM"
+ *             check_out_time: "11:00 AM"
+ *             cancellation_policy: "Free cancellation up to 48 hours before check-in"
+ *             gst_number: "27AAAAA0000A1Z5"
  *             featured: false
  *     responses:
  *       200:
@@ -379,175 +525,6 @@ router.post('/hotels/:hotelId/images', upload.array('images', 10), vendorCtrl.up
  *         description: Image deleted successfully
  */
 router.delete('/images/:imageId', vendorCtrl.deleteHotelImage);
-
-/**
- * @swagger
- * /api/vendor/hotels/{hotelId}/rooms:
- *   post:
- *     summary: Create a new room
- *     tags: [Vendor API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: hotelId
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - type
- *               - price
- *             properties:
- *               type:
- *                 type: string
- *                 description: "Room type (e.g., Deluxe, Suite). Alias: room_type"
- *               room_type:
- *                 type: string
- *                 description: Alias for type
- *               price:
- *                 type: number
- *                 format: float
- *                 description: "Price per night. Alias: price_per_night"
- *               price_per_night:
- *                 type: number
- *                 format: float
- *                 description: Alias for price
- *               total_rooms:
- *                 type: integer
- *                 description: Number of such rooms available (defaults to 1 if omitted)
- *               amenities:
- *                 oneOf:
- *                   - type: array
- *                     items:
- *                       type: string
- *                   - type: string
- *                 description: Array or comma-separated string
- *     responses:
- *       201:
- *         description: Room created successfully
- *   get:
- *     summary: Get rooms by hotel
- *     tags: [Vendor API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: hotelId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: List of hotel rooms
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Room'
- */
-router.post('/hotels/:hotelId/rooms', vendorCtrl.createRoom);
-router.get('/hotels/:hotelId/rooms', vendorCtrl.getMyRooms);
-
-/**
- * @swagger
- * /api/vendor/rooms:
- *   get:
- *     summary: Get all my rooms
- *     tags: [Vendor API]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of all vendor rooms
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Room'
- */
-router.get('/rooms', vendorCtrl.getAllMyRooms);
-
-/**
- * @swagger
- * /api/vendor/rooms/{roomId}:
- *   get:
- *     summary: Get room by ID
- *     tags: [Vendor API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Room details
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Room'
- *   put:
- *     summary: Update room
- *     tags: [Vendor API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               room_type:
- *                 type: string
- *               price_per_night:
- *                 type: number
- *                 format: float
- *               max_occupancy:
- *                 type: integer
- *               amenities:
- *                 type: array
- *                 items:
- *                   type: string
- *               availability:
- *                 type: boolean
- *     responses:
- *       200:
- *         description: Room updated successfully
- *   delete:
- *     summary: Delete room
- *     tags: [Vendor API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Room deleted successfully
- */
-router.get('/rooms/:roomId', vendorCtrl.getRoomById);
-router.put('/rooms/:roomId', vendorCtrl.updateRoom);
-router.delete('/rooms/:roomId', vendorCtrl.deleteRoom);
 
 /**
  * @swagger
@@ -747,9 +724,9 @@ router.get('/reports/revenue', vendorCtrl.getRevenueReport);
  *       200:
  *         description: Room availability updated successfully
  */
-router.put('/rooms/:roomId/availability', (req, res) => {
-  res.json({ message: 'Vendor room availability update endpoint' });
-});
+// router.put('/rooms/:roomId/availability', (req, res) => {
+//   res.json({ message: 'Vendor room availability update endpoint' });
+// });
 
 /**
  * @swagger
@@ -776,9 +753,9 @@ router.put('/rooms/:roomId/availability', (req, res) => {
  *                 maintenance_rooms:
  *                   type: integer
  */
-router.get('/inventory/summary', (req, res) => {
-  res.json({ message: 'Vendor inventory summary endpoint' });
-});
+// router.get('/inventory/summary', (req, res) => {
+//   res.json({ message: 'Vendor inventory summary endpoint' });
+// });
 
 /**
  * @swagger
@@ -810,9 +787,9 @@ router.get('/inventory/summary', (req, res) => {
  *       200:
  *         description: Room pricing updated successfully
  */
-router.put('/rooms/:roomId/pricing', (req, res) => {
-  res.json({ message: 'Vendor room pricing update endpoint' });
-});
+// router.put('/rooms/:roomId/pricing', (req, res) => {
+//   res.json({ message: 'Vendor room pricing update endpoint' });
+// });
 
 /**
  * @swagger
@@ -843,9 +820,9 @@ router.put('/rooms/:roomId/pricing', (req, res) => {
  *       200:
  *         description: Bulk pricing updated successfully
  */
-router.post('/pricing/bulk-update', (req, res) => {
-  res.json({ message: 'Vendor bulk pricing update endpoint' });
-});
+// router.post('/pricing/bulk-update', (req, res) => {
+//   res.json({ message: 'Vendor bulk pricing update endpoint' });
+// });
 
 /**
  * @swagger

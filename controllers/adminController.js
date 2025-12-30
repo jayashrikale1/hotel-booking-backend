@@ -547,7 +547,7 @@ module.exports = {
       include: [
         { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name'] },
         { model: HotelImage, as: 'images' },
-        { model: Room, as: 'rooms' }
+        // { model: Room, as: 'rooms' }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -563,7 +563,7 @@ module.exports = {
       include: [
         { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name'] },
         { model: HotelImage, as: 'images' },
-        { model: Room, as: 'rooms' }
+        // { model: Room, as: 'rooms' }
       ]
     });
     

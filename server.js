@@ -25,6 +25,33 @@ const PORT = process.env.PORT || 3001;
           after: 'address'
         });
       }
+      const hotels = await qi.describeTable('hotels');
+      if (!hotels.map_url) {
+        console.log('Adding missing column hotels.map_url');
+        await qi.addColumn('hotels', 'map_url', {
+          type: DataTypes.STRING,
+          allowNull: true,
+          after: 'longitude'
+        });
+      }
+      if (!hotels.hotel_features) {
+        console.log('Adding missing column hotels.hotel_features');
+        await qi.addColumn('hotels', 'hotel_features', {
+          type: DataTypes.JSON,
+          allowNull: true,
+          after: 'amenities'
+        });
+      }
+      const bookings = await qi.describeTable('bookings');
+      if (!bookings.price_per_night) {
+        console.log('Adding missing column bookings.price_per_night');
+        await qi.addColumn('bookings', 'price_per_night', {
+          type: DataTypes.FLOAT,
+          allowNull: false,
+          defaultValue: 0,
+          after: 'amount'
+        });
+      }
     } catch (e) {
       // Ignore describe/add errors; sync alter will attempt to fix
       console.warn('Schema check warning:', e.message);

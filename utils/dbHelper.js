@@ -11,7 +11,7 @@ const { Op } = require('sequelize');
  * @returns {Object} - Sequelize where conditions
  */
 const buildHotelSearchConditions = (query) => {
-  const { city, destination, name, status = 'APPROVED' } = query;
+  const { city, destination, name, status = 'APPROVED', minPrice, maxPrice } = query;
   const where = {};
 
   if (status && status !== 'ALL') {
@@ -26,12 +26,39 @@ const buildHotelSearchConditions = (query) => {
     where.name = { [Op.like]: `%${name}%` };
   }
 
+  const andConditions = [];
+
   if (destination) {
-    where[Op.or] = [
-      { city: { [Op.like]: `%${destination}%` } },
-      { name: { [Op.like]: `%${destination}%` } },
-      { address: { [Op.like]: `%${destination}%` } }
-    ];
+    andConditions.push({
+      [Op.or]: [
+        { city: { [Op.like]: `%${destination}%` } },
+        { name: { [Op.like]: `%${destination}%` } },
+        { address: { [Op.like]: `%${destination}%` } }
+      ]
+    });
+  }
+
+  if (minPrice || maxPrice) {
+    const min = minPrice ? parseFloat(minPrice) : 0;
+    const max = maxPrice ? parseFloat(maxPrice) : Number.MAX_VALUE;
+    andConditions.push({
+      [Op.or]: [
+        {
+          ac_room_price: {
+            [Op.and]: [{ [Op.gte]: min }, { [Op.lte]: max }]
+          }
+        },
+        {
+          non_ac_room_price: {
+            [Op.and]: [{ [Op.gte]: min }, { [Op.lte]: max }]
+          }
+        }
+      ]
+    });
+  }
+
+  if (andConditions.length > 0) {
+    where[Op.and] = andConditions;
   }
 
   return where;
@@ -65,7 +92,7 @@ const buildRoomPriceConditions = (query) => {
  */
 const getHotelIncludes = () => [
   { model: require('../models').HotelImage, as: 'images' },
-  { model: require('../models').Room, as: 'rooms' },
+  // { model: require('../models').Room, as: 'rooms' },
   { model: require('../models').Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
 ];
 
@@ -75,7 +102,7 @@ const getHotelIncludes = () => [
 const getBookingIncludes = () => [
   { model: require('../models').User, as: 'user', attributes: ['id', 'full_name', 'email', 'phone'] },
   { model: require('../models').Hotel, as: 'hotel', attributes: ['id', 'name', 'address', 'city'] },
-  { model: require('../models').Room, as: 'room', attributes: ['id', 'type', 'price'] }
+  // { model: require('../models').Room, as: 'room', attributes: ['id', 'type', 'price'] }
 ];
 
 /**

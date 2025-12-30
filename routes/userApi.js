@@ -19,131 +19,13 @@ router.use('/auth', userAuthRoutes);
 // All user routes require authentication
 router.use(authenticate, requireRole(['USER', 'OWNER', 'VENDOR', 'ADMIN']));
 
-/**
- * @swagger
- * /api/user/hotels:
- *   get:
- *     summary: Get all hotels
- *     tags: [User API]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of all hotels
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Hotel'
- */
-router.get('/hotels', userCtrl.getAllHotels);
 
-/**
- * @swagger
- * /api/user/hotels/search:
- *   get:
- *     summary: Search hotels
- *     tags: [User API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: city
- *         schema:
- *           type: string
- *         description: City to search in
- *       - in: query
- *         name: checkin
- *         schema:
- *           type: string
- *           format: date
- *         description: Check-in date
- *       - in: query
- *         name: checkout
- *         schema:
- *           type: string
- *           format: date
- *         description: Check-out date
- *     responses:
- *       200:
- *         description: Search results
- */
-router.get('/hotels/search', userCtrl.searchHotels);
 
-/**
- * @swagger
- * /api/user/hotels/{hotelId}:
- *   get:
- *     summary: Get hotel by ID
- *     tags: [User API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: hotelId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Hotel details
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Hotel'
- */
-router.get('/hotels/:hotelId', userCtrl.getHotelById);
 
-/**
- * @swagger
- * /api/user/hotels/{hotelId}/rooms:
- *   get:
- *     summary: Get rooms by hotel
- *     tags: [User API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: hotelId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: List of rooms
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Room'
- */
-router.get('/hotels/:hotelId/rooms', userCtrl.getRoomsByHotel);
 
-/**
- * @swagger
- * /api/user/rooms/{roomId}:
- *   get:
- *     summary: Get room by ID
- *     tags: [User API]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Room details
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Room'
- */
-router.get('/rooms/:roomId', userCtrl.getRoomById);
+// Room-based endpoints removed; schema no longer present
+
+// Room-based endpoints removed; schema no longer present
 
 /**
  * @swagger
@@ -161,31 +43,38 @@ router.get('/rooms/:roomId', userCtrl.getRoomById);
  *             type: object
  *             required:
  *               - hotel_id
- *               - room_id
+ *               - room_type
  *               - check_in
  *               - check_out
  *             properties:
  *               hotel_id:
  *                 type: integer
  *                 description: ID of the hotel
- *               room_id:
- *                 type: integer
- *                 description: ID of the room
+ *                 example: 1
+ *               room_type:
+ *                 type: string
+ *                 enum: [AC, NON_AC]
+ *                 description: Type of room (AC or NON_AC)
+ *                 example: AC
  *               check_in:
  *                 type: string
  *                 format: date
  *                 description: Check-in date (YYYY-MM-DD)
+ *                 example: "2025-12-28"
  *               check_out:
  *                 type: string
  *                 format: date
  *                 description: Check-out date (YYYY-MM-DD)
+ *                 example: "2025-12-30"
  *               guests:
  *                 type: integer
  *                 default: 1
  *                 description: Number of guests
+ *                 example: 2
  *               coupon_code:
  *                 type: string
  *                 description: Optional coupon code for discount
+ *                 example: "WELCOME2025"
  *     responses:
  *       201:
  *         description: Booking created successfully
@@ -205,6 +94,9 @@ router.get('/rooms/:roomId', userCtrl.getRoomById);
  *                   properties:
  *                     booking:
  *                       $ref: '#/components/schemas/Booking'
+ *                     price_per_night:
+ *                       type: number
+ *                       description: Price per night used for calculation
  *                     amount:
  *                       type: number
  *                       description: Final booking amount after discount
@@ -304,6 +196,72 @@ router.get('/bookings', userCtrl.getMyBookings);
  *               $ref: '#/components/schemas/Booking'
  */
 router.get('/bookings/:bookingId', userCtrl.getBookingById);
+
+/**
+ * @swagger
+ * /api/user/payment-key:
+ *   get:
+ *     summary: Get Razorpay key ID
+ *     tags: [User API]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Payment key retrieved
+ */
+router.get('/payment-key', userCtrl.getPaymentKey);
+
+/**
+ * @swagger
+ * /api/user/bookings/{bookingId}/pay:
+ *   post:
+ *     summary: Initiate payment for a booking (creates Razorpay order)
+ *     tags: [User API]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Payment initiated with order details
+ */
+router.post('/bookings/:bookingId/pay', userCtrl.initiatePayment);
+
+/**
+ * @swagger
+ * /api/user/bookings/{bookingId}/payment/complete:
+ *   post:
+ *     summary: Complete payment (test) and update booking status
+ *     tags: [User API]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               gateway_payment_id:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [success, failed]
+ *     responses:
+ *       200:
+ *         description: Payment updated successfully
+ */
+router.post('/bookings/:bookingId/payment/complete', userCtrl.completePayment);
 
 /**
  * @swagger

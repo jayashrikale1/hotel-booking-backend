@@ -13,16 +13,56 @@ module.exports = {
   createBooking: async (req, res) => {
     const t = await sequelize.transaction();
     try {
-      const { hotel_id, room_id, check_in, check_out, guests, payment_method, coupon_code } = req.body;
-      // check room exists and availability
-      const room = await Room.findByPk(room_id, { transaction: t });
-      if (!room) { await t.rollback(); return res.status(404).json({ message: 'Room not found' }); }
-      if (room.available_rooms < 1) { await t.rollback(); return res.status(400).json({ message: 'No available rooms' }); }
+      const { hotel_id, room_id, room_type, check_in, check_out, guests, payment_method, coupon_code } = req.body;
+      
+      let price = 0;
+      let vendor_id = 0;
+      
+      if (room_id) {
+         // Legacy logic with Room model
+         /*
+          const room = await Room.findByPk(room_id, { transaction: t });
+          if (!room) { await t.rollback(); return res.status(404).json({ message: 'Room not found' }); }
+          if (room.available_rooms < 1) { await t.rollback(); return res.status(400).json({ message: 'No available rooms' }); }
+          
+          price = room.price;
+          vendor_id = room.hotel_id ? (await Hotel.findByPk(room.hotel_id)).vendor_id : 0;
+          
+           // decrement availability
+          room.available_rooms = room.available_rooms - 1;
+          await room.save({ transaction: t });
+          */
+          // Force legacy requests to fail or redirect? For now, let's just error out if room_id is used but Room model is deprecated
+           await t.rollback(); return res.status(400).json({ message: 'Room ID based booking is deprecated. Use hotel_id and room_type.' });
+          
+      } else if (room_type && hotel_id) {
+          // New logic with Hotel model fields
+          const hotel = await Hotel.findByPk(hotel_id, { transaction: t });
+          if (!hotel) { await t.rollback(); return res.status(404).json({ message: 'Hotel not found' }); }
+          
+          vendor_id = hotel.vendor_id;
+          
+          if (room_type === 'AC') {
+              if (hotel.ac_rooms < 1) { await t.rollback(); return res.status(400).json({ message: 'No available AC rooms' }); }
+              price = parseFloat(hotel.ac_room_price);
+              hotel.ac_rooms = hotel.ac_rooms - 1;
+          } else if (room_type === 'NON_AC') {
+              if (hotel.non_ac_rooms < 1) { await t.rollback(); return res.status(400).json({ message: 'No available Non-AC rooms' }); }
+              price = parseFloat(hotel.non_ac_room_price);
+              hotel.non_ac_rooms = hotel.non_ac_rooms - 1;
+          } else {
+               await t.rollback(); return res.status(400).json({ message: 'Invalid room type' });
+          }
+          
+          await hotel.save({ transaction: t });
+      } else {
+          await t.rollback(); return res.status(400).json({ message: 'Either room_id or (hotel_id + room_type) is required' });
+      }
 
       // calculate nights and amount (simple)
       const days = (new Date(check_out) - new Date(check_in)) / (1000*60*60*24);
       const nights = Math.max(1, Math.ceil(days));
-      let baseAmount = room.price * nights;
+      let baseAmount = price * nights;
       let discount_amount = 0;
       let applied_coupon_code = null;
 
@@ -54,16 +94,13 @@ module.exports = {
 
       const amount = Math.max(0, baseAmount - discount_amount);
 
-      // decrement availability
-      room.available_rooms = room.available_rooms - 1;
-      await room.save({ transaction: t });
-
       // create booking
       const booking = await Booking.create({
         user_id: req.user.id,
-        vendor_id: room.hotel_id ? (await Hotel.findByPk(room.hotel_id)).vendor_id : 0,
+        vendor_id,
         hotel_id,
-        room_id,
+        room_id: room_id || null,
+        room_type: room_type || null,
         check_in,
         check_out,
         guests: guests || 1,
@@ -130,6 +167,25 @@ module.exports = {
       } else {
         booking.status = 'CANCELLED';
         await booking.save();
+
+        // Restore room availability on failed payment
+        if (booking.room_id) {
+        //   const room = await Room.findByPk(booking.room_id);
+        //   if (room) {
+        //      room.available_rooms = room.available_rooms + 1;
+        //      await room.save();
+        //   }
+        } else if (booking.room_type && booking.hotel_id) {
+            const hotel = await Hotel.findByPk(booking.hotel_id);
+            if (hotel) {
+                if (booking.room_type === 'AC') {
+                    hotel.ac_rooms = hotel.ac_rooms + 1;
+                } else if (booking.room_type === 'NON_AC') {
+                    hotel.non_ac_rooms = hotel.non_ac_rooms + 1;
+                }
+                await hotel.save();
+            }
+        }
       }
       res.json({ payment, booking });
     } catch (err) { console.error(err); res.status(500).json({ message: err.message }); }
@@ -155,15 +211,28 @@ module.exports = {
       const booking = await Booking.findByPk(req.params.bookingId, { transaction: t });
       if (!booking) { await t.rollback(); return res.status(404).json({ message: 'Booking not found' }); }
       if (booking.user_id !== req.user.id && booking.vendor_id !== req.user.id) { await t.rollback(); return res.status(403).json({ message: 'Not allowed' }); }
+      if (booking.status === 'CANCELLED') { await t.rollback(); return res.status(400).json({ message: 'Already cancelled' }); }
 
       booking.status = 'CANCELLED';
       await booking.save({ transaction: t });
 
-      // increment available rooms
-      const room = await Room.findByPk(booking.room_id, { transaction: t });
-      if (room) {
-        room.available_rooms = room.available_rooms + 1;
-        await room.save({ transaction: t });
+      // restore room availability
+      if (booking.room_id) {
+        // const room = await Room.findByPk(booking.room_id, { transaction: t });
+        // if (room) {
+        //   room.available_rooms = room.available_rooms + 1;
+        //   await room.save({ transaction: t });
+        // }
+      } else if (booking.room_type && booking.hotel_id) {
+        const hotel = await Hotel.findByPk(booking.hotel_id, { transaction: t });
+        if (hotel) {
+          if (booking.room_type === 'AC') {
+            hotel.ac_rooms = hotel.ac_rooms + 1;
+          } else if (booking.room_type === 'NON_AC') {
+            hotel.non_ac_rooms = hotel.non_ac_rooms + 1;
+          }
+          await hotel.save({ transaction: t });
+        }
       }
 
       await t.commit();

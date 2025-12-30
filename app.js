@@ -63,6 +63,9 @@ app.use('/api/vendor', vendorApiRoutes);
 // Public API - No authentication required
 app.use('/api/public', publicApiRoutes);
 
+// Payment webhooks
+app.use('/api/payments', require('./routes/payments'));
+
 // swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

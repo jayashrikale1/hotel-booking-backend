@@ -51,14 +51,17 @@ const isValidPhone = (phone) => {
  * @returns {Object} - { isValid: boolean, message: string }
  */
 const validateDate = (dateString, shouldBeFuture = false) => {
-  const date = new Date(dateString);
+  const [y, m, d] = String(dateString).split('-').map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   
   if (isNaN(date.getTime())) {
     return { isValid: false, message: 'Invalid date format' };
   }
   
-  if (shouldBeFuture && date <= new Date()) {
-    return { isValid: false, message: 'Date must be in the future' };
+  if (shouldBeFuture && date < todayStart) {
+    return { isValid: false, message: 'Date must be today or in the future' };
   }
   
   return { isValid: true, message: 'Valid date' };
@@ -71,8 +74,12 @@ const validateDate = (dateString, shouldBeFuture = false) => {
  * @returns {Object} - { isValid: boolean, message: string }
  */
 const validateDateRange = (checkIn, checkOut) => {
-  const checkInDate = new Date(checkIn);
-  const checkOutDate = new Date(checkOut);
+  const [ciY, ciM, ciD] = String(checkIn).split('-').map(Number);
+  const [coY, coM, coD] = String(checkOut).split('-').map(Number);
+  const checkInDate = new Date(ciY, (ciM || 1) - 1, ciD || 1);
+  const checkOutDate = new Date(coY, (coM || 1) - 1, coD || 1);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   
   if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
     return { isValid: false, message: 'Invalid date format' };
@@ -82,8 +89,8 @@ const validateDateRange = (checkIn, checkOut) => {
     return { isValid: false, message: 'Check-out date must be after check-in date' };
   }
   
-  if (checkInDate < new Date()) {
-    return { isValid: false, message: 'Check-in date cannot be in the past' };
+  if (checkInDate < todayStart) {
+    return { isValid: false, message: 'Check-in date cannot be before today' };
   }
   
   return { isValid: true, message: 'Valid date range' };

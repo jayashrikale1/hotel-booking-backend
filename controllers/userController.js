@@ -3,7 +3,14 @@
  * Handles user operations - hotel search, booking management, reviews
  */
 
-const { Hotel, HotelImage, Room, Booking, Review, User, Vendor } = require('../models');
+const { Hotel, HotelImage, Room, Booking, Review, User, Vendor, Payment } = require('../models');
+const { Op, literal } = require('sequelize');
+const Razorpay = require('razorpay');
+require('dotenv').config();
+const razorpay = new Razorpay({
+  key_id: process.env.RZP_KEY || '',
+  key_secret: process.env.RZP_SECRET || ''
+});
 const { sendSuccess, sendError, sendPaginatedResponse } = require('../utils/responseHelper');
 const { validateRequiredFields, validateDateRange, isValidRating, validatePagination } = require('../utils/validationHelper');
 const { 
@@ -14,6 +21,7 @@ const {
   getPaginationOffset,
   calculateBookingAmount
 } = require('../utils/dbHelper');
+const { sendBookingConfirmationEmail } = require('../utils/mailer');
 const { asyncHandler } = require('../middlewares/errorHandler');
 
 // Helper function to create error
@@ -27,56 +35,6 @@ module.exports = {
   // ============ HOTEL BROWSING ============
 
   /**
-   * Get all hotels with filtering and pagination
-   */
-  getAllHotels: asyncHandler(async (req, res) => {
-    const { page, limit } = validatePagination(req.query.page, req.query.limit);
-    const where = buildHotelSearchConditions(req.query);
-    const roomWhere = buildRoomPriceConditions(req.query);
-    const offset = getPaginationOffset(page, limit);
-
-    const hotels = await Hotel.findAndCountAll({
-      where,
-      include: [
-        { model: HotelImage, as: 'images' },
-        { 
-          model: Room, 
-          as: 'rooms', 
-          where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
-          required: false 
-        },
-        { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
-      ],
-      limit,
-      offset,
-      order: [['createdAt', 'DESC']]
-    });
-
-    const sanitize = (url) => {
-      if (!url) return null;
-      if (url.includes('/src/assets/')) return null;
-      return url.startsWith('/uploads/') ? url : null;
-    };
-
-    const rows = hotels.rows.map(h => {
-      const imgs = (h.images || []).filter(img => sanitize(img.url));
-      h.images = imgs;
-      return h;
-    });
-
-    const pagination = {
-      page,
-      totalPages: Math.ceil(hotels.count / limit),
-      totalItems: hotels.count,
-      limit,
-      hasNext: page < Math.ceil(hotels.count / limit),
-      hasPrev: page > 1
-    };
-
-    sendPaginatedResponse(res, rows, pagination, 'Hotels retrieved successfully');
-  }),
-
-  /**
    * Get hotel by ID with full details
    */
   getHotelById: asyncHandler(async (req, res) => {
@@ -84,7 +42,7 @@ module.exports = {
       where: { status: 'APPROVED' },
       include: [
         { model: HotelImage, as: 'images' },
-        { model: Room, as: 'rooms' },
+        // { model: Room, as: 'rooms' },
         { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] },
         { 
           model: Review, 
@@ -108,19 +66,19 @@ module.exports = {
   searchHotels: asyncHandler(async (req, res) => {
     const { page, limit } = validatePagination(req.query.page, req.query.limit);
     const where = buildHotelSearchConditions(req.query);
-    const roomWhere = buildRoomPriceConditions(req.query);
+    // const roomWhere = buildRoomPriceConditions(req.query);
     const offset = getPaginationOffset(page, limit);
 
     const hotels = await Hotel.findAndCountAll({
       where,
       include: [
         { model: HotelImage, as: 'images' },
-        { 
-          model: Room, 
-          as: 'rooms', 
-          where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
-          required: Object.keys(roomWhere).length > 0
-        },
+        // { 
+        //   model: Room, 
+        //   as: 'rooms', 
+        //   where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
+        //   required: Object.keys(roomWhere).length > 0
+        // },
         { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
       ],
       limit,
@@ -135,12 +93,12 @@ module.exports = {
         where: relaxedWhere,
         include: [
           { model: HotelImage, as: 'images' },
-          { 
-            model: Room, 
-            as: 'rooms', 
-            where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
-            required: Object.keys(roomWhere).length > 0
-          },
+          // { 
+          //   model: Room, 
+          //   as: 'rooms', 
+          //   where: Object.keys(roomWhere).length > 0 ? roomWhere : undefined,
+          //   required: Object.keys(roomWhere).length > 0
+          // },
           { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'business_name'] }
         ],
         limit,
@@ -193,6 +151,71 @@ module.exports = {
   }),
 
   /**
+   * Get hotel room types (AC / NON_AC) with prices and availability
+   */
+  getHotelRoomTypes: asyncHandler(async (req, res) => {
+    const { check_in, check_out } = req.query;
+    const hotel = await Hotel.findByPk(req.params.hotelId);
+    if (!hotel) {
+      throw createError('Hotel not found', 404);
+    }
+    const acPrice = parseFloat(hotel.ac_room_price || hotel.base_price || 0);
+    const nonAcPrice = parseFloat(hotel.non_ac_room_price || hotel.base_price || 0);
+    const acTotal = parseInt(hotel.ac_rooms || hotel.available_rooms || hotel.total_rooms || 0);
+    const nonAcTotal = parseInt(hotel.non_ac_rooms || hotel.available_rooms || hotel.total_rooms || 0);
+
+    let acAvailable = acTotal;
+    let nonAcAvailable = nonAcTotal;
+
+    if (check_in && check_out) {
+      const acBookings = await Booking.count({
+        where: {
+          hotel_id: hotel.id,
+          room_type: 'AC',
+          status: { [Op.in]: ['PENDING', 'CONFIRMED'] },
+          [Op.and]: [
+            { check_in: { [Op.lt]: check_out } },
+            { check_out: { [Op.gt]: check_in } }
+          ]
+        }
+      });
+      const nonAcBookings = await Booking.count({
+        where: {
+          hotel_id: hotel.id,
+          room_type: 'NON_AC',
+          status: { [Op.in]: ['PENDING', 'CONFIRMED'] },
+          [Op.and]: [
+            { check_in: { [Op.lt]: check_out } },
+            { check_out: { [Op.gt]: check_in } }
+          ]
+        }
+      });
+      acAvailable = Math.max(0, acTotal - acBookings);
+      nonAcAvailable = Math.max(0, nonAcTotal - nonAcBookings);
+    }
+
+    const types = [];
+    if (acTotal > 0 && acPrice > 0) {
+      types.push({
+        type: 'AC',
+        price_per_night: acPrice,
+        total: acTotal,
+        available: acAvailable
+      });
+    }
+    if (nonAcTotal > 0 && nonAcPrice > 0) {
+      types.push({
+        type: 'NON_AC',
+        price_per_night: nonAcPrice,
+        total: nonAcTotal,
+        available: nonAcAvailable
+      });
+    }
+
+    sendSuccess(res, { hotel_id: hotel.id, types }, 'Room types retrieved successfully');
+  }),
+
+  /**
    * Get room by ID with hotel details
    */
   getRoomById: asyncHandler(async (req, res) => {
@@ -218,10 +241,10 @@ module.exports = {
    * Create a new booking
    */
   createBooking: asyncHandler(async (req, res) => {
-    const { hotel_id, room_id, check_in, check_out, guests = 1, coupon_code } = req.body;
+    const { hotel_id, room_type, check_in, check_out, guests = 1, coupon_code } = req.body;
     
     // Validate required fields
-    const validation = validateRequiredFields(req.body, ['hotel_id', 'room_id', 'check_in', 'check_out']);
+    const validation = validateRequiredFields(req.body, ['hotel_id', 'room_type', 'check_in', 'check_out']);
     if (!validation.isValid) {
       throw createError(`Missing required fields: ${validation.missingFields.join(', ')}`, 400);
     }
@@ -232,39 +255,79 @@ module.exports = {
       throw createError(dateValidation.message, 400);
     }
 
-    // Validate room availability
-    const room = await Room.findByPk(room_id, {
-      include: [{ model: Hotel, as: 'hotel', where: { status: 'APPROVED' } }]
-    });
-
-    if (!room) {
-      throw createError('Room not found or hotel not approved', 404);
+    // Validate room type
+    const normalizedRoomType = room_type.toUpperCase();
+    if (!['AC', 'NON_AC'].includes(normalizedRoomType)) {
+      throw createError('Invalid room type. Must be AC or NON_AC', 400);
     }
 
-    if (room.available_rooms < 1) {
-      throw createError('Room not available', 400);
+    // Get hotel details
+    const hotel = await Hotel.findByPk(hotel_id, {
+      where: { status: 'APPROVED' }
+    });
+
+    if (!hotel) {
+      throw createError('Hotel not found or not approved', 404);
+    }
+
+    // Determine price and capacity
+    let pricePerNight = 0;
+    let totalCapacity = 0;
+
+    if (normalizedRoomType === 'AC') {
+      pricePerNight = parseFloat(hotel.ac_room_price || 0);
+      totalCapacity = Number(hotel.ac_rooms || 0);
+    } else {
+      pricePerNight = parseFloat(hotel.non_ac_room_price || 0);
+      totalCapacity = Number(hotel.non_ac_rooms || 0);
+    }
+    if (!pricePerNight) {
+      pricePerNight = parseFloat(hotel.base_price || 0);
+    }
+    if (totalCapacity <= 0) {
+      totalCapacity = Number(hotel.available_rooms || hotel.total_rooms || 0);
+    }
+    if (!pricePerNight || totalCapacity <= 0) {
+      throw createError(`Selected room type (${normalizedRoomType}) is not available at this hotel`, 400);
+    }
+
+    // Check availability
+    const overlappingBookings = await Booking.count({
+      where: {
+        hotel_id,
+        room_type: normalizedRoomType,
+        status: { [Op.in]: ['PENDING', 'CONFIRMED'] },
+        [Op.and]: [
+          { check_in: { [Op.lt]: check_out } },
+          { check_out: { [Op.gt]: check_in } }
+        ]
+      }
+    });
+
+    // Assuming 1 booking = 1 room
+    if (overlappingBookings >= totalCapacity) {
+      throw createError('No rooms available for the selected dates', 400);
     }
 
     // Calculate base booking amount
-    const { amount: baseAmount, nights } = calculateBookingAmount(room.price, check_in, check_out);
+    const { amount: baseAmount, nights } = calculateBookingAmount(pricePerNight, check_in, check_out);
     
     let finalAmount = baseAmount;
     let discountAmount = 0;
     let appliedCouponCode = null;
 
-    // Apply coupon if provided
+    // Coupon logic
     if (coupon_code) {
       const { Coupon } = require('../models');
-      const { Op, literal } = require('sequelize');
       const now = new Date();
       
       const coupon = await Coupon.findOne({
-        where: {
-          code: coupon_code,
-          active: true,
-          expiry: { [Op.or]: [{ [Op.gt]: now }, null] },
-          used_count: { [Op.lt]: literal('usage_limit') }
-        }
+          where: {
+              code: coupon_code,
+              active: true,
+              expiry: { [Op.or]: [{ [Op.gt]: now }, null] },
+              used_count: { [Op.lt]: literal('usage_limit') }
+          }
       });
 
       if (coupon) {
@@ -282,24 +345,27 @@ module.exports = {
     // Create booking
     const booking = await Booking.create({
       user_id: req.user.id,
-      vendor_id: room.hotel.vendor_id,
+      vendor_id: hotel.vendor_id,
       hotel_id,
-      room_id,
+      room_type: normalizedRoomType,
+      // room_id is null
       check_in,
       check_out,
       guests,
       amount: finalAmount,
+      price_per_night: pricePerNight,
       coupon_code: appliedCouponCode,
       discount_amount: discountAmount,
       status: 'PENDING'
     });
 
-    // Update room availability
-    await room.update({ available_rooms: room.available_rooms - 1 });
+    // We do NOT decrement available_rooms on the hotel model as it is a summary field.
+    // Availability is calculated dynamically.
 
     sendSuccess(res, { 
       booking, 
       amount: finalAmount, 
+      price_per_night: pricePerNight,
       base_amount: baseAmount,
       discount_amount: discountAmount,
       nights,
@@ -311,13 +377,10 @@ module.exports = {
    * Get user's bookings with pagination
    */
   getMyBookings: asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, status } = req.query;
+    const { page: queryPage, limit: queryLimit, status } = req.query;
     
     // Validate pagination
-    const paginationValidation = validatePagination(page, limit);
-    if (!paginationValidation.isValid) {
-      throw createError(paginationValidation.message, 400);
-    }
+    const { page, limit } = validatePagination(queryPage, queryLimit);
 
     // Build where conditions
     const where = { user_id: req.user.id };
@@ -325,23 +388,23 @@ module.exports = {
       where.status = status;
     }
 
-    const offset = getPaginationOffset(parseInt(page), parseInt(limit));
+    const offset = getPaginationOffset(page, limit);
 
     const { count, rows: bookings } = await Booking.findAndCountAll({
       where,
       include: getBookingIncludes(),
       order: [['createdAt', 'DESC']],
-      limit: parseInt(limit),
+      limit,
       offset
     });
 
     const pagination = {
-      page: parseInt(page),
-      totalPages: Math.ceil(count / parseInt(limit)),
+      page,
+      totalPages: Math.ceil(count / limit),
       totalItems: count,
-      limit: parseInt(limit),
-      hasNext: parseInt(page) < Math.ceil(count / parseInt(limit)),
-      hasPrev: parseInt(page) > 1
+      limit,
+      hasNext: page < Math.ceil(count / limit),
+      hasPrev: page > 1
     };
 
     sendPaginatedResponse(res, bookings, pagination, 'Bookings retrieved successfully');
@@ -364,6 +427,93 @@ module.exports = {
     }
 
     sendSuccess(res, { booking }, 'Booking details retrieved successfully');
+  }),
+
+  /**
+   * Get payment key
+   */
+  getPaymentKey: asyncHandler(async (req, res) => {
+    sendSuccess(res, { key_id: process.env.RZP_KEY }, 'Payment key retrieved');
+  }),
+
+  /**
+   * Initiate payment for a booking (creates Razorpay order and Payment record)
+   */
+  initiatePayment: asyncHandler(async (req, res) => {
+    const booking = await Booking.findOne({
+      where: { id: req.params.bookingId, user_id: req.user.id }
+    });
+    if (!booking) {
+      throw createError('Booking not found', 404);
+    }
+    if (!booking.amount || booking.amount <= 0) {
+      throw createError('Invalid booking amount', 400);
+    }
+    const order = await razorpay.orders.create({
+      amount: Math.round(parseFloat(booking.amount) * 100),
+      currency: 'INR',
+      receipt: `rcpt_${booking.id}`
+    });
+    const payment = await Payment.create({
+      booking_id: booking.id,
+      gateway: 'RAZORPAY',
+      gateway_payment_id: order.id,
+      amount: booking.amount,
+      status: 'INITIATED'
+    });
+    sendSuccess(res, { order, payment, key_id: process.env.RZP_KEY }, 'Payment initiated');
+  }),
+
+  /**
+   * Complete payment for a booking (manual test endpoint)
+   */
+  completePayment: asyncHandler(async (req, res) => {
+    const { gateway_payment_id, status } = req.body;
+    
+    // Fetch booking with all necessary relations for email
+    const booking = await Booking.findOne({
+      where: { id: req.params.bookingId, user_id: req.user.id },
+      include: [
+        { model: Hotel, as: 'hotel' },
+        { model: User, as: 'user' }
+      ]
+    });
+
+    if (!booking) {
+      throw createError('Booking not found', 404);
+    }
+    const payment = await Payment.findOne({ where: { booking_id: booking.id } });
+    if (!payment) {
+      throw createError('Payment not found', 404);
+    }
+    payment.gateway_payment_id = gateway_payment_id || payment.gateway_payment_id;
+    payment.status = String(status).toLowerCase() === 'success' ? 'SUCCESS' : 'FAILED';
+    await payment.save();
+    
+    if (payment.status === 'SUCCESS') {
+      booking.status = 'CONFIRMED';
+      booking.payment_id = payment.gateway_payment_id;
+      await booking.save();
+
+      // Send confirmation email
+      if (booking.user && booking.user.email) {
+        await sendBookingConfirmationEmail(booking.user.email, {
+          userName: booking.user.full_name || 'Valued Guest',
+          hotelName: booking.hotel ? booking.hotel.name : 'Hotel',
+          hotelAddress: booking.hotel ? booking.hotel.address : '',
+          checkIn: booking.check_in,
+          checkOut: booking.check_out,
+          roomType: booking.room_type,
+          totalAmount: booking.amount,
+          bookingId: booking.id,
+          guests: booking.guests
+        });
+      }
+    } else {
+      booking.status = 'CANCELLED';
+      await booking.save();
+    }
+    sendSuccess(res, { payment, booking }, 'Payment status updated');
   }),
 
   /**

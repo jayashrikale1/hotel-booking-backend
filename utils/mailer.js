@@ -118,4 +118,87 @@ const sendOtpEmail = async (email, otp, purpose = 'Login OTP') => {
   }
 };
 
-module.exports.sendOtpEmail = sendOtpEmail;
+const sendBookingConfirmationEmail = async (email, bookingDetails) => {
+  const {
+    userName,
+    hotelName,
+    hotelAddress,
+    checkIn,
+    checkOut,
+    roomType,
+    totalAmount,
+    bookingId,
+    guests
+  } = bookingDetails;
+
+  const mailOptions = {
+    from: `"Hotel Booking System" <${process.env.SMTP_USER || 'no-reply@example.com'}>`,
+    to: email,
+    subject: `Booking Confirmation - ${hotelName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-bottom: 3px solid #007bff;">
+          <h2 style="margin: 0; color: #007bff;">Booking Confirmed!</h2>
+          <p style="margin: 10px 0 0;">Booking ID: <strong>#${bookingId}</strong></p>
+        </div>
+        
+        <div style="padding: 20px;">
+          <p>Dear <strong>${userName}</strong>,</p>
+          <p>Thank you for choosing <strong>${hotelName}</strong>. Your booking has been successfully confirmed.</p>
+          
+          <div style="background-color: #f1f1f1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 10px;">Booking Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Hotel:</td>
+                <td style="padding: 8px 0; font-weight: bold;">${hotelName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Address:</td>
+                <td style="padding: 8px 0;">${hotelAddress}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Check-in:</td>
+                <td style="padding: 8px 0; font-weight: bold;">${new Date(checkIn).toLocaleDateString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Check-out:</td>
+                <td style="padding: 8px 0; font-weight: bold;">${new Date(checkOut).toLocaleDateString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Room Type:</td>
+                <td style="padding: 8px 0;">${roomType}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Guests:</td>
+                <td style="padding: 8px 0;">${guests}</td>
+              </tr>
+               <tr>
+                <td style="padding: 8px 0; color: #666; border-top: 1px solid #ddd;">Total Amount:</td>
+                <td style="padding: 8px 0; font-weight: bold; color: #28a745; border-top: 1px solid #ddd;">₹${totalAmount}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p>We look forward to hosting you!</p>
+          <p>If you have any questions, please contact our support.</p>
+        </div>
+        
+        <div style="background-color: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666;">
+          <p>&copy; ${new Date().getFullYear()} Hotel Booking System. All rights reserved.</p>
+        </div>
+      </div>
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Booking confirmation email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send booking confirmation email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+module.exports = { transporter, sendPasswordResetEmail, sendOtpEmail, sendBookingConfirmationEmail };

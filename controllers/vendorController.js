@@ -38,77 +38,96 @@ module.exports = {
 
   /**
  * Create a new hotel
- */
+  */
 createHotel: asyncHandler(async (req, res) => {
-  const {
-    name, description, address, city, state, pincode, country,
-    latitude, longitude, amenities, phone, email, rating,
-    total_rooms, available_rooms, base_price, featured
-  } = req.body;
+    const {
+      name, description, address, city, state, pincode, country,
+      latitude, longitude, amenities, hotel_features, phone, email, rating,
+      total_rooms, available_rooms, base_price, featured,
+      ac_room_price, non_ac_room_price, ac_rooms, non_ac_rooms,
+      check_in_time, check_out_time, cancellation_policy, gst_number,
+      map_url
+    } = req.body;
 
-  const vendor = await Vendor.findByPk(req.user.id);
-  if (!vendor) {
-    throw createError('Vendor not found', 404);
-  }
-  if (vendor.status !== 'ACTIVE') {
-    throw createError('Vendor account is not active', 403);
-  }
-
-  // Validate required fields
-  const validation = validateRequiredFields(req.body, ['name', 'address', 'city']);
-  if (!validation.isValid) {
-    throw createError(`Missing required fields: ${validation.missingFields.join(', ')}`, 400);
-  }
-
-  if (email && !isValidEmail(email)) {
-    throw createError('Invalid email format', 400);
-  }
-
-  // Helpers
-  const normalizeAmenities = (val) => {
-    if (Array.isArray(val)) return val;
-    if (typeof val === 'string') {
-      const t = val.trim();
-      if (!t) return null;
-      if (t.startsWith('[')) { try { const p = JSON.parse(t); return Array.isArray(p) ? p : null; } catch { /* noop */ } }
-      return t.split(',').map(s => s.trim()).filter(Boolean);
+    const vendor = await Vendor.findByPk(req.user.id);
+    if (!vendor) {
+      throw createError('Vendor not found', 404);
     }
-    return val == null ? null : [];
-  };
+    if (vendor.status !== 'ACTIVE') {
+      throw createError('Vendor account is not active', 403);
+    }
 
-  const lat = latitude === '' || latitude === null || typeof latitude === 'undefined' ? null : parseFloat(latitude);
-  const lng = longitude === '' || longitude === null || typeof longitude === 'undefined' ? null : parseFloat(longitude);
-  const parsedRating = rating === '' || rating === null || typeof rating === 'undefined' ? 0.0 : Math.max(0, Math.min(5, parseFloat(rating)));
-  const parsedTotal = total_rooms === '' || total_rooms === null || typeof total_rooms === 'undefined' ? 0 : parseInt(total_rooms);
-  let parsedAvail = available_rooms === '' || available_rooms === null || typeof available_rooms === 'undefined' ? parsedTotal : parseInt(available_rooms);
-  parsedAvail = Math.max(0, Math.min(parsedAvail, parsedTotal));
-  const parsedPrice = base_price === '' || base_price === null || typeof base_price === 'undefined' ? 0.0 : Math.max(0, parseFloat(base_price));
-  const parsedFeatured = typeof featured === 'boolean' ? featured : (String(featured).toLowerCase() === 'true');
+    // Validate required fields
+    const validation = validateRequiredFields(req.body, ['name', 'address', 'city']);
+    if (!validation.isValid) {
+      throw createError(`Missing required fields: ${validation.missingFields.join(', ')}`, 400);
+    }
 
-  const hotel = await Hotel.create({
-    vendor_id: req.user.id,
-    name,
-    description,
-    address,
-    city,
-    state,
-    pincode,
-    country: country || 'India',
-    latitude: lat,
-    longitude: lng,
-    amenities: normalizeAmenities(amenities),
-    phone: phone || null,
-    email: email || null,
-    rating: parsedRating,
-    total_rooms: parsedTotal,
-    available_rooms: parsedAvail,
-    base_price: parsedPrice,
-    featured: parsedFeatured,
-    status: 'PENDING'
-  });
+    if (email && !isValidEmail(email)) {
+      throw createError('Invalid email format', 400);
+    }
 
-  sendSuccess(res, { hotel }, 'Hotel created successfully and is pending approval', 201);
-}),
+    // Helpers
+    const normalizeAmenities = (val) => {
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string') {
+        const t = val.trim();
+        if (!t) return null;
+        if (t.startsWith('[')) { try { const p = JSON.parse(t); return Array.isArray(p) ? p : null; } catch { /* noop */ } }
+        return t.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      return val == null ? null : [];
+    };
+
+    const lat = latitude === '' || latitude === null || typeof latitude === 'undefined' ? null : parseFloat(latitude);
+    const lng = longitude === '' || longitude === null || typeof longitude === 'undefined' ? null : parseFloat(longitude);
+    const parsedRating = rating === '' || rating === null || typeof rating === 'undefined' ? 0.0 : Math.max(0, Math.min(5, parseFloat(rating)));
+    const parsedTotal = total_rooms === '' || total_rooms === null || typeof total_rooms === 'undefined' ? 0 : parseInt(total_rooms);
+    let parsedAvail = available_rooms === '' || available_rooms === null || typeof available_rooms === 'undefined' ? parsedTotal : parseInt(available_rooms);
+    parsedAvail = Math.max(0, Math.min(parsedAvail, parsedTotal));
+    const parsedPrice = base_price === '' || base_price === null || typeof base_price === 'undefined' ? 0.0 : Math.max(0, parseFloat(base_price));
+    const parsedFeatured = typeof featured === 'boolean' ? featured : (String(featured).toLowerCase() === 'true');
+
+    // New Fields Parsing
+    const parsedAcPrice = ac_room_price === '' || ac_room_price === null || typeof ac_room_price === 'undefined' ? null : Math.max(0, parseFloat(ac_room_price));
+    const parsedNonAcPrice = non_ac_room_price === '' || non_ac_room_price === null || typeof non_ac_room_price === 'undefined' ? null : Math.max(0, parseFloat(non_ac_room_price));
+    const parsedAcRooms = ac_rooms === '' || ac_rooms === null || typeof ac_rooms === 'undefined' ? 0 : parseInt(ac_rooms);
+    const parsedNonAcRooms = non_ac_rooms === '' || non_ac_rooms === null || typeof non_ac_rooms === 'undefined' ? 0 : parseInt(non_ac_rooms);
+
+    const hotel = await Hotel.create({
+      vendor_id: req.user.id,
+      name,
+      description,
+      address,
+      city,
+      state,
+      pincode,
+      country: country || 'India',
+      latitude: lat,
+      longitude: lng,
+      map_url: map_url || null,
+      amenities: normalizeAmenities(amenities),
+      hotel_features: normalizeAmenities(hotel_features),
+      phone: phone || null,
+      email: email || null,
+      rating: isNaN(parsedRating) ? 0.0 : parsedRating,
+      total_rooms: isNaN(parsedTotal) ? 0 : parsedTotal,
+      available_rooms: isNaN(parsedAvail) ? 0 : parsedAvail,
+      base_price: isNaN(parsedPrice) ? 0.0 : parsedPrice,
+      status: 'PENDING',
+      featured: parsedFeatured,
+      ac_room_price: isNaN(parsedAcPrice) ? null : parsedAcPrice,
+      non_ac_room_price: isNaN(parsedNonAcPrice) ? null : parsedNonAcPrice,
+      ac_rooms: isNaN(parsedAcRooms) ? 0 : parsedAcRooms,
+      non_ac_rooms: isNaN(parsedNonAcRooms) ? 0 : parsedNonAcRooms,
+      check_in_time: check_in_time || null,
+      check_out_time: check_out_time || null,
+      cancellation_policy: cancellation_policy || null,
+      gst_number: gst_number || null
+    });
+
+    sendSuccess(res, { hotel }, 'Hotel created successfully and is pending approval', 201);
+  }),
 
 
   /**
@@ -128,7 +147,7 @@ createHotel: asyncHandler(async (req, res) => {
       where,
       include: [
         { model: HotelImage, as: 'images' },
-        { model: Room, as: 'rooms' }
+        // { model: Room, as: 'rooms' }
       ],
       limit,
       offset,
@@ -153,11 +172,14 @@ createHotel: asyncHandler(async (req, res) => {
   }),
 
 
+
+
+
   /**
  * Get all approved hotels (Public - No authentication required)
  */
-getAllHotelsPublic: asyncHandler(async (req, res) => {
-  try {
+  getAllHotelsPublic: asyncHandler(async (req, res) => {
+    try {
     const { city, state, country, status } = req.query; // Optional filters
     const where = {};
     if (!status || status === 'APPROVED') {
@@ -179,11 +201,11 @@ getAllHotelsPublic: asyncHandler(async (req, res) => {
           as: 'images',
           attributes: ['id', 'url']
         },
-        {
-          model: Room,
-          as: 'rooms',
-          attributes: ['id', 'type', 'price', 'available_rooms'] // ✅ removed capacity
-        },
+        // {
+        //   model: Room,
+        //   as: 'rooms',
+        //   attributes: ['id', 'type', 'price', 'available_rooms'] // ✅ removed capacity
+        // },
         {
           model: Vendor,
           as: 'vendor',
@@ -200,7 +222,7 @@ getAllHotelsPublic: asyncHandler(async (req, res) => {
         where: whereNoStatus,
         include: [
           { model: HotelImage, as: 'images', attributes: ['id', 'url'] },
-          { model: Room, as: 'rooms', attributes: ['id', 'type', 'price', 'available_rooms'] },
+          // { model: Room, as: 'rooms', attributes: ['id', 'type', 'price', 'available_rooms'] },
           { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name', 'phone', 'business_address'] }
         ],
         order: [['createdAt', 'DESC']]
@@ -231,7 +253,7 @@ getAllHotelsPublic: asyncHandler(async (req, res) => {
       },
       include: [
         { model: HotelImage, as: 'images' },
-        { model: Room, as: 'rooms' },
+        // { model: Room, as: 'rooms' },
         { 
           model: Review, 
           as: 'reviews',
@@ -248,6 +270,34 @@ getAllHotelsPublic: asyncHandler(async (req, res) => {
   }),
 
   
+
+  /**
+   * Get hotel by ID (Public - Approved only)
+   */
+  getHotelByIdPublic: asyncHandler(async (req, res) => {
+    const hotel = await Hotel.findOne({
+      where: { 
+        id: req.params.hotelId
+        // status: 'APPROVED'
+      },
+      include: [
+        { model: HotelImage, as: 'images', attributes: ['id', 'url'] },
+        { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name', 'phone', 'business_address'] },
+        { 
+          model: Review, 
+          as: 'reviews',
+          include: [{ model: User, as: 'user', attributes: ['full_name'] }]
+        }
+      ]
+    });
+
+    if (!hotel) {
+      throw createError('Hotel not found', 404);
+    }
+
+    hotel.images = (hotel.images || []).filter(img => img.url && img.url.startsWith('/uploads/') && !img.url.includes('/src/assets/'));
+    sendSuccess(res, { hotel }, 'Hotel details retrieved successfully');
+  }),
 
 
 /**
@@ -278,6 +328,12 @@ updateHotel: asyncHandler(async (req, res) => {
   if (hasProp('pincode')) updates.pincode = body.pincode;
   if (hasProp('country')) updates.country = body.country;
   if (hasProp('phone')) updates.phone = body.phone;
+  if (hasProp('map_url')) updates.map_url = body.map_url;
+  if (hasProp('check_in_time')) updates.check_in_time = body.check_in_time;
+  if (hasProp('check_out_time')) updates.check_out_time = body.check_out_time;
+  if (hasProp('cancellation_policy')) updates.cancellation_policy = body.cancellation_policy;
+  if (hasProp('gst_number')) updates.gst_number = body.gst_number;
+
   if (hasProp('email')) {
     if (body.email && !isValidEmail(body.email)) {
       throw createError('Invalid email format', 400);
@@ -302,6 +358,23 @@ updateHotel: asyncHandler(async (req, res) => {
   }
   if (hasProp('featured')) {
     updates.featured = typeof body.featured === 'boolean' ? body.featured : (String(body.featured).toLowerCase() === 'true');
+  }
+
+  if (hasProp('ac_room_price')) {
+    const p = body.ac_room_price === '' || body.ac_room_price === null ? null : parseFloat(body.ac_room_price);
+    updates.ac_room_price = (p === null || isNaN(p)) ? null : Math.max(0, p);
+  }
+  if (hasProp('non_ac_room_price')) {
+    const p = body.non_ac_room_price === '' || body.non_ac_room_price === null ? null : parseFloat(body.non_ac_room_price);
+    updates.non_ac_room_price = (p === null || isNaN(p)) ? null : Math.max(0, p);
+  }
+  if (hasProp('ac_rooms')) {
+    const r = body.ac_rooms === '' || body.ac_rooms === null ? 0 : parseInt(body.ac_rooms);
+    updates.ac_rooms = isNaN(r) ? 0 : Math.max(0, r);
+  }
+  if (hasProp('non_ac_rooms')) {
+    const r = body.non_ac_rooms === '' || body.non_ac_rooms === null ? 0 : parseInt(body.non_ac_rooms);
+    updates.non_ac_rooms = isNaN(r) ? 0 : Math.max(0, r);
   }
 
   // Room counters with clamping
@@ -337,6 +410,26 @@ updateHotel: asyncHandler(async (req, res) => {
       }
     } else if (val == null) {
       updates.amenities = null;
+    }
+  }
+
+  if (hasProp('hotel_features')) {
+    const val = body.hotel_features;
+    if (Array.isArray(val)) {
+      updates.hotel_features = val.length ? val : null;
+    } else if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) {
+        updates.hotel_features = null;
+      } else if (trimmed.startsWith('[')) {
+        try { const parsed = JSON.parse(trimmed); updates.hotel_features = Array.isArray(parsed) ? parsed : null; }
+        catch { const arr = trimmed.split(',').map(s => s.trim()).filter(Boolean); updates.hotel_features = arr.length ? arr : null; }
+      } else {
+        const arr = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+        updates.hotel_features = arr.length ? arr : null;
+      }
+    } else if (val == null) {
+      updates.hotel_features = null;
     }
   }
 
@@ -389,12 +482,9 @@ updateHotel: asyncHandler(async (req, res) => {
 
 
 
-// In controllers/vendorController.js
-// Add this method near other hotel endpoints (e.g., after deleteHotel, before uploadHotelImages)
-
- /**
-  * Get hotel images (vendor-owned)
-  */
+  /**
+   * Get hotel images (vendor-owned)
+   */
  getHotelImages: asyncHandler(async (req, res) => {
   const hotel = await Hotel.findOne({
     where: {
@@ -467,214 +557,6 @@ updateHotel: asyncHandler(async (req, res) => {
 
     await image.destroy();
     sendSuccess(res, null, 'Image deleted successfully');
-  }),
-
-  // ============ ROOM MANAGEMENT ============
-
-  /**
-   * Create a room for hotel
-   */
-  createRoom: asyncHandler(async (req, res) => {
-    const hotel = await Hotel.findOne({
-      where: { 
-        id: req.params.hotelId,
-        vendor_id: req.user.id 
-      }
-    });
-
-    if (!hotel) {
-      throw createError('Hotel not found', 404);
-    }
-
-    const {
-      type,
-      price,
-      total_rooms,
-      amenities,
-      // Alternate field names used in some clients/older swagger
-      room_type,
-      price_per_night,
-      max_occupancy
-    } = req.body;
-
-    // Normalize inputs
-    const normalizedType = (type || room_type || '').toString().trim();
-    const normalizedPriceRaw = price != null ? price : price_per_night;
-    const normalizedPrice = normalizedPriceRaw === '' || normalizedPriceRaw == null
-      ? NaN
-      : parseFloat(normalizedPriceRaw);
-    // total_rooms historically represents how many such rooms exist. If not provided, default to 1.
-    const totalRoomsRaw = total_rooms != null ? total_rooms : undefined;
-    const normalizedTotalRooms = totalRoomsRaw === '' || totalRoomsRaw == null
-      ? 1
-      : parseInt(totalRoomsRaw);
-
-    // Validate required fields (type + price). total_rooms is optional, defaults to 1.
-    if (!normalizedType || Number.isNaN(normalizedPrice)) {
-      const missing = [];
-      if (!normalizedType) missing.push('type');
-      if (Number.isNaN(normalizedPrice)) missing.push('price');
-      throw createError(`Missing required fields: ${missing.join(', ')}`, 400);
-    }
-
-    // Normalize amenities (array or comma-separated string -> JSON array or null)
-    let normalizedAmenities = null;
-    if (Array.isArray(amenities)) {
-      normalizedAmenities = amenities.length ? amenities : null;
-    } else if (typeof amenities === 'string') {
-      const trimmed = amenities.trim();
-      if (trimmed) {
-        if (trimmed.startsWith('[')) {
-          try { const parsed = JSON.parse(trimmed); normalizedAmenities = Array.isArray(parsed) ? parsed : null; }
-          catch { normalizedAmenities = trimmed.split(',').map(s => s.trim()).filter(Boolean); }
-        } else {
-          normalizedAmenities = trimmed.split(',').map(s => s.trim()).filter(Boolean);
-        }
-      }
-    }
-
-    const room = await Room.create({
-      hotel_id: hotel.id,
-      type: normalizedType,
-      price: Math.max(0, normalizedPrice),
-      total_rooms: Math.max(1, Number.isNaN(normalizedTotalRooms) ? 1 : normalizedTotalRooms),
-      available_rooms: Math.max(1, Number.isNaN(normalizedTotalRooms) ? 1 : normalizedTotalRooms),
-      amenities: normalizedAmenities ? JSON.stringify(normalizedAmenities) : null
-    });
-
-    sendSuccess(res, { room }, 'Room created successfully', 201);
-  }),
-
-  /**
-   * Get rooms for specific hotel
-   */
-  getMyRooms: asyncHandler(async (req, res) => {
-    const { hotelId } = req.params;
-    
-    // Verify hotel ownership
-    const hotel = await Hotel.findOne({
-      where: { 
-        id: hotelId,
-        vendor_id: req.user.id 
-      }
-    });
-
-    if (!hotel) {
-      throw createError('Hotel not found', 404);
-    }
-
-    const rooms = await Room.findAll({
-      where: { hotel_id: hotelId },
-      include: [{ model: Hotel, as: 'hotel', attributes: ['id', 'name'] }],
-      order: [['createdAt', 'DESC']]
-    });
-
-    sendSuccess(res, { rooms }, 'Rooms retrieved successfully');
-  }),
-
-  /**
-   * Get all rooms across all vendor's hotels
-   */
-  getAllMyRooms: asyncHandler(async (req, res) => {
-    const rooms = await Room.findAll({
-      include: [{
-        model: Hotel,
-        as: 'hotel',
-        where: { vendor_id: req.user.id },
-        attributes: ['id', 'name']
-      }],
-      order: [['createdAt', 'DESC']]
-    });
-
-    sendSuccess(res, { rooms }, 'All rooms retrieved successfully');
-  }),
-
-  /**
-   * Get room by ID (with ownership check)
-   */
-  getRoomById: asyncHandler(async (req, res) => {
-    const room = await Room.findByPk(req.params.roomId, {
-      include: [{
-        model: Hotel,
-        as: 'hotel',
-        where: { vendor_id: req.user.id }
-      }]
-    });
-
-    if (!room) {
-      throw createError('Room not found', 404);
-    }
-
-    sendSuccess(res, { room }, 'Room details retrieved successfully');
-  }),
-
-  /**
-   * Update room information
-   */
-  updateRoom: asyncHandler(async (req, res) => {
-    const room = await Room.findByPk(req.params.roomId, {
-      include: [{
-        model: Hotel,
-        as: 'hotel',
-        where: { vendor_id: req.user.id }
-      }]
-    });
-
-    if (!room) {
-      throw createError('Room not found', 404);
-    }
-
-    const { type, price, total_rooms, amenities } = req.body;
-    const updateData = {};
-    
-    if (type) updateData.type = type;
-    if (price) updateData.price = parseFloat(price);
-    if (total_rooms) {
-      const newTotal = parseInt(total_rooms);
-      updateData.total_rooms = newTotal;
-      
-      // Adjust available rooms proportionally
-      const currentAvailable = room.available_rooms;
-      const currentTotal = room.total_rooms;
-      const ratio = currentAvailable / currentTotal;
-      updateData.available_rooms = Math.floor(newTotal * ratio);
-    }
-    if (amenities) updateData.amenities = JSON.stringify(amenities);
-
-    await room.update(updateData);
-    sendSuccess(res, { room }, 'Room updated successfully');
-  }),
-
-  /**
-   * Delete room (with active booking check)
-   */
-  deleteRoom: asyncHandler(async (req, res) => {
-    const room = await Room.findByPk(req.params.roomId, {
-      include: [{
-        model: Hotel,
-        as: 'hotel',
-        where: { vendor_id: req.user.id }
-      }]
-    });
-
-    if (!room) {
-      throw createError('Room not found', 404);
-    }
-
-    // Check for active bookings
-    const activeBookings = await Booking.count({
-      where: {
-        room_id: room.id,
-        status: ['PENDING', 'CONFIRMED']
-      }
-    });
-
-    if (activeBookings > 0) {
-      throw createError('Cannot delete room with active bookings', 400);
-    }
-
-    await room.destroy();
-    sendSuccess(res, null, 'Room deleted successfully');
   }),
 
   // ============ BOOKING MANAGEMENT ============
@@ -796,9 +678,18 @@ updateHotel: asyncHandler(async (req, res) => {
 
     // If cancelled, restore room availability
     if (status === 'CANCELLED') {
-      const room = await Room.findByPk(booking.room_id);
-      if (room) {
-        await room.update({ available_rooms: room.available_rooms + 1 });
+      if (booking.room_type && booking.hotel_id) {
+        const hotel = await Hotel.findByPk(booking.hotel_id);
+        if (hotel) {
+          if (booking.room_type === 'AC') {
+            hotel.ac_rooms = (hotel.ac_rooms || 0) + 1;
+          } else if (booking.room_type === 'NON_AC') {
+            hotel.non_ac_rooms = (hotel.non_ac_rooms || 0) + 1;
+          }
+          // Update available_rooms as well if it tracks total availability
+          hotel.available_rooms = (hotel.available_rooms || 0) + 1;
+          await hotel.save();
+        }
       }
     }
 

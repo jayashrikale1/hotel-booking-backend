@@ -67,7 +67,15 @@ const options = {
             country: { type: 'string' },
             latitude: { type: 'number', format: 'float' },
             longitude: { type: 'number', format: 'float' },
+            map_url: { type: 'string', format: 'uri' },
             amenities: {
+              oneOf: [
+                { type: 'array', items: { type: 'string' } },
+                { type: 'object', additionalProperties: true },
+                { type: 'null' }
+              ]
+            },
+            hotel_features: {
               oneOf: [
                 { type: 'array', items: { type: 'string' } },
                 { type: 'object', additionalProperties: true },
@@ -79,24 +87,17 @@ const options = {
             rating: { type: 'number', format: 'float' },
             total_rooms: { type: 'integer' },
             available_rooms: { type: 'integer' },
+            ac_rooms: { type: 'integer' },
+            non_ac_rooms: { type: 'integer' },
             base_price: { type: 'number', format: 'float' },
+            ac_room_price: { type: 'number', format: 'float' },
+            non_ac_room_price: { type: 'number', format: 'float' },
+            check_in_time: { type: 'string' },
+            check_out_time: { type: 'string' },
+            cancellation_policy: { type: 'string' },
+            gst_number: { type: 'string' },
             status: { type: 'string', enum: ['PENDING','APPROVED','REJECTED','INACTIVE'] },
             featured: { type: 'boolean' },
-            created_at: { type: 'string', format: 'date-time' },
-            updated_at: { type: 'string', format: 'date-time' }
-          }
-        },
-
-        Room: {
-          type: 'object',
-          properties: {
-            id: { type: 'integer' },
-            hotel_id: { type: 'integer' },
-            room_type: { type: 'string' },
-            price_per_night: { type: 'number', format: 'float' },
-            max_occupancy: { type: 'integer' },
-            amenities: { type: 'array', items: { type: 'string' } },
-            availability: { type: 'boolean' },
             created_at: { type: 'string', format: 'date-time' },
             updated_at: { type: 'string', format: 'date-time' }
           }

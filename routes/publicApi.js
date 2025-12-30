@@ -6,7 +6,7 @@ const userCtrl = require('../controllers/userController');
 // These endpoints are accessible without authentication
 
 // Browse all approved hotels
-router.get('/hotels', userCtrl.getAllHotels);
+router.get('/hotels', userCtrl.searchHotels);
 
 // Search hotels with filters
 router.get('/hotels/search', userCtrl.searchHotels);
@@ -16,6 +16,65 @@ router.get('/hotels/:hotelId', userCtrl.getHotelById);
 
 // Get rooms for a specific hotel
 router.get('/hotels/:hotelId/rooms', userCtrl.getRoomsByHotel);
+
+/**
+ * @swagger
+ * /api/public/hotels/{hotelId}/room-types:
+ *   get:
+ *     summary: Get hotel room types with prices and availability
+ *     tags: [Public]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the hotel
+ *       - in: query
+ *         name: check_in
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Optional check-in date (YYYY-MM-DD) to compute availability
+ *       - in: query
+ *         name: check_out
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Optional check-out date (YYYY-MM-DD) to compute availability
+ *     responses:
+ *       200:
+ *         description: Room types retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     hotel_id:
+ *                       type: integer
+ *                     types:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           type:
+ *                             type: string
+ *                             enum: [AC, NON_AC]
+ *                           price_per_night:
+ *                             type: number
+ *                           total:
+ *                             type: integer
+ *                           available:
+ *                             type: integer
+ */
+router.get('/hotels/:hotelId/room-types', userCtrl.getHotelRoomTypes);
 
 // Get specific room details
 router.get('/rooms/:roomId', userCtrl.getRoomById);
