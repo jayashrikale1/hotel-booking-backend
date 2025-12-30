@@ -576,19 +576,6 @@ module.exports = {
       throw createError('Rating must be between 1 and 5', 400);
     }
 
-    // Check if user has a completed booking for this hotel
-    const booking = await Booking.findOne({
-      where: {
-        user_id: req.user.id,
-        hotel_id,
-        status: 'COMPLETED'
-      }
-    });
-
-    if (!booking) {
-      throw createError('You can only review hotels you have completed bookings for', 403);
-    }
-
     // Check if user already reviewed this hotel
     const existingReview = await Review.findOne({
       where: {

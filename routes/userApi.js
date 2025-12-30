@@ -19,6 +19,25 @@ router.use('/auth', userAuthRoutes);
 // All user routes require authentication
 router.use(authenticate, requireRole(['USER', 'OWNER', 'VENDOR', 'ADMIN']));
 
+/**
+ * @swagger
+ * /api/user/hotels/{hotelId}:
+ *   get:
+ *     summary: Get hotel details by ID
+ *     tags: [User API]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Hotel details retrieved successfully
+ */
+router.get('/hotels/:hotelId', userCtrl.getHotelById);
 
 
 
@@ -287,7 +306,7 @@ router.post('/bookings/:bookingId/cancel', userCtrl.cancelBooking);
  * @swagger
  * /api/user/reviews:
  *   post:
- *     summary: Create a review for a hotel (requires completed booking)
+ *     summary: Create a review for a hotel
  *     tags: [User API]
  *     security:
  *       - bearerAuth: []
@@ -332,8 +351,6 @@ router.post('/bookings/:bookingId/cancel', userCtrl.cancelBooking);
  *                   properties:
  *                     review:
  *                       $ref: '#/components/schemas/Review'
- *       403:
- *         description: User has no completed booking for this hotel
  *       400:
  *         description: User has already reviewed this hotel
  *   get:
