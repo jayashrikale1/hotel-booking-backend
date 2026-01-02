@@ -1042,8 +1042,8 @@ router.get('/reports/financial', (req, res) => {
  *       201:
  *         description: Coupon created successfully
  */
-router.get('/coupons', requireRole(['VENDOR']), couponCtrl.getMyCoupons);
-router.post('/coupons', requireRole(['VENDOR']), couponCtrl.createCoupon);
+router.get('/coupons', requireRole(['ADMIN']), couponCtrl.getMyCoupons);
+router.post('/coupons', requireRole(['ADMIN']), couponCtrl.createCoupon);
 
 /**
  * @swagger
@@ -1098,8 +1098,8 @@ router.post('/coupons', requireRole(['VENDOR']), couponCtrl.createCoupon);
  *       200:
  *         description: Coupon deleted successfully
  */
-router.get('/coupons/:couponId', requireRole(['VENDOR']), couponCtrl.getCouponById);
-router.put('/coupons/:couponId', requireRole(['VENDOR']), couponCtrl.updateCoupon);
-router.delete('/coupons/:couponId', requireRole(['VENDOR']), couponCtrl.deleteCoupon);
+router.get('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.getCouponById);
+router.put('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.updateCoupon);
+router.delete('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.deleteCoupon);
 
 module.exports = router;

@@ -4,7 +4,7 @@ const { DataTypes } = require('sequelize');
 module.exports = (sequelize) => {
   const Coupon = sequelize.define('Coupon', {
     id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
-    vendor_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+    vendor_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
     code: { type: DataTypes.STRING, allowNull: false, unique: true },
     type: { type: DataTypes.ENUM('FLAT', 'PERCENT'), defaultValue: 'FLAT' },
     value: { type: DataTypes.FLOAT, allowNull: false },

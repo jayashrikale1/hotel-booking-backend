@@ -52,6 +52,20 @@ const PORT = process.env.PORT || 3001;
           after: 'amount'
         });
       }
+
+      // Fix coupon vendor_id constraint
+      try {
+        const coupons = await qi.describeTable('coupons');
+        if (coupons.vendor_id && coupons.vendor_id.allowNull === false) {
+           console.log('Relaxing coupons.vendor_id constraint to allow NULL');
+           await qi.changeColumn('coupons', 'vendor_id', {
+               type: DataTypes.INTEGER.UNSIGNED,
+               allowNull: true
+           });
+        }
+      } catch (couponErr) {
+         console.warn('Could not modify coupons table (might not exist yet):', couponErr.message);
+      }
     } catch (e) {
       // Ignore describe/add errors; sync alter will attempt to fix
       console.warn('Schema check warning:', e.message);

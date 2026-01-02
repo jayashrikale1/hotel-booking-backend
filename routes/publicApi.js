@@ -1,6 +1,8 @@
 // routes/publicApi.js - PUBLIC API ENDPOINTS (NO AUTHENTICATION REQUIRED)
 const router = require('express').Router();
 const userCtrl = require('../controllers/userController');
+const couponCtrl = require('../controllers/couponController');
+const paymentCtrl = require('../controllers/paymentController');
 
 // ============ PUBLIC HOTEL BROWSING API ============
 // These endpoints are accessible without authentication
@@ -120,5 +122,33 @@ router.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Get payment key
+router.get('/payment-key', paymentCtrl.getPaymentKey);
+
+// ============ PUBLIC COUPON API ============
+/**
+ * @swagger
+ * /api/public/coupons:
+ *   get:
+ *     summary: Get all active global coupons
+ *     tags: [Public]
+ *     responses:
+ *       200:
+ *         description: Available coupons retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     coupons: { type: array, items: { $ref: '#/components/schemas/Coupon' } }
+ *                     count: { type: integer }
+ */
+router.get('/coupons', couponCtrl.getAvailableCoupons);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 // routes/adminApi.js - ADMIN ONLY API ENDPOINTS
 const router = require('express').Router();
 const adminCtrl = require('../controllers/adminController');
+const couponCtrl = require('../controllers/couponController');
 const { authenticate, requireRole } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
@@ -338,5 +339,98 @@ router.get('/payments/:paymentId', (req, res) => {
   // Admin can view payment details
   res.json({ message: 'Admin payment details endpoint' });
 });
+
+// ============ COUPON MANAGEMENT API (ADMIN ONLY) ============
+/**
+ * @swagger
+ * /api/admin/coupons:
+ *   get:
+ *     summary: Get all coupons
+ *     tags: [Admin - Coupons]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Coupons retrieved successfully
+ *   post:
+ *     summary: Create coupon
+ *     tags: [Admin - Coupons]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [code, type, value]
+ *             properties:
+ *               code: { type: string }
+ *               type: { type: string, enum: [PERCENT, FLAT] }
+ *               value: { type: number }
+ *               expiry: { type: string, format: date-time }
+ *               usage_limit: { type: integer }
+ *               active: { type: boolean }
+ *     responses:
+ *       201:
+ *         description: Coupon created successfully
+ */
+router.get('/coupons', requireRole(['ADMIN']), couponCtrl.getMyCoupons);
+router.post('/coupons', requireRole(['ADMIN']), couponCtrl.createCoupon);
+
+/**
+ * @swagger
+ * /api/admin/coupons/{couponId}:
+ *   get:
+ *     summary: Get coupon by ID
+ *     tags: [Admin - Coupons]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: couponId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Coupon retrieved successfully
+ *   put:
+ *     summary: Update coupon
+ *     tags: [Admin - Coupons]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: couponId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               code: { type: string }
+ *               type: { type: string, enum: [PERCENT, FLAT] }
+ *               value: { type: number }
+ *               expiry: { type: string, format: date-time }
+ *               usage_limit: { type: integer }
+ *               active: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Coupon updated successfully
+ *   delete:
+ *     summary: Delete coupon
+ *     tags: [Admin - Coupons]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: couponId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Coupon deleted successfully
+ */
+router.get('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.getCouponById);
+router.put('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.updateCoupon);
+router.delete('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.deleteCoupon);
 
 module.exports = router;

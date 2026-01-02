@@ -4,11 +4,10 @@ const { Op, literal } = require('sequelize');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 
 /**
- * @description Create a new coupon for the logged-in vendor
+ * @description Create a new coupon
  */
 const createCoupon = async (req, res) => {
   try {
-    const vendor_id = req.user.id;
     const { code, type, value, expiry, usage_limit, active } = req.body;
 
     // Validate required fields
@@ -24,7 +23,7 @@ const createCoupon = async (req, res) => {
 
     // Create coupon
     const coupon = await Coupon.create({
-      vendor_id,
+      vendor_id: null,
       code: code.toUpperCase(),
       type,
       value,
@@ -34,7 +33,7 @@ const createCoupon = async (req, res) => {
       active: active !== undefined ? active : true
     });
 
-    return sendSuccess(res, 'Coupon created successfully', { coupon }, 201);
+    return sendSuccess(res, { coupon }, 'Coupon created successfully', 201);
   } catch (err) {
     console.error('Error creating coupon:', err);
     return sendError(res, err.message, 500);
@@ -42,18 +41,13 @@ const createCoupon = async (req, res) => {
 };
 
 /**
- * @description Get all coupons for the logged-in vendor
+ * @description Get coupons (admin-only; returns all)
  */
 const getMyCoupons = async (req, res) => {
   try {
-    const vendor_id = req.user.id;
+    const coupons = await Coupon.findAll({ order: [['createdAt', 'DESC']] });
 
-    const coupons = await Coupon.findAll({
-      where: { vendor_id },
-      order: [['createdAt', 'DESC']]
-    });
-
-    return sendSuccess(res, 'Coupons retrieved successfully', { coupons, count: coupons.length });
+    return sendSuccess(res, { coupons, count: coupons.length }, 'Coupons retrieved successfully');
   } catch (err) {
     console.error('Error fetching coupons:', err);
     return sendError(res, err.message, 500);
@@ -61,22 +55,18 @@ const getMyCoupons = async (req, res) => {
 };
 
 /**
- * @description Get a single coupon by ID (vendor-scoped)
+ * @description Get a single coupon by ID (admin-only)
  */
 const getCouponById = async (req, res) => {
   try {
-    const vendor_id = req.user.id;
     const { couponId } = req.params;
-
-    const coupon = await Coupon.findOne({
-      where: { id: couponId, vendor_id }
-    });
+    const coupon = await Coupon.findOne({ where: { id: couponId } });
 
     if (!coupon) {
       return sendError(res, 'Coupon not found', 404);
     }
 
-    return sendSuccess(res, 'Coupon retrieved successfully', { coupon });
+    return sendSuccess(res, { coupon }, 'Coupon retrieved successfully');
   } catch (err) {
     console.error('Error fetching coupon:', err);
     return sendError(res, err.message, 500);
@@ -84,17 +74,14 @@ const getCouponById = async (req, res) => {
 };
 
 /**
- * @description Update a coupon (vendor-scoped)
+ * @description Update a coupon (admin-only)
  */
 const updateCoupon = async (req, res) => {
   try {
-    const vendor_id = req.user.id;
     const { couponId } = req.params;
     const { code, type, value, expiry, usage_limit, active } = req.body;
 
-    const coupon = await Coupon.findOne({
-      where: { id: couponId, vendor_id }
-    });
+    const coupon = await Coupon.findOne({ where: { id: couponId } });
 
     if (!coupon) {
       return sendError(res, 'Coupon not found', 404);
@@ -118,7 +105,7 @@ const updateCoupon = async (req, res) => {
       active: active !== undefined ? active : coupon.active
     });
 
-    return sendSuccess(res, 'Coupon updated successfully', { coupon });
+    return sendSuccess(res, { coupon }, 'Coupon updated successfully');
   } catch (err) {
     console.error('Error updating coupon:', err);
     return sendError(res, err.message, 500);
@@ -126,16 +113,13 @@ const updateCoupon = async (req, res) => {
 };
 
 /**
- * @description Delete a coupon (vendor-scoped)
+ * @description Delete a coupon (admin-only)
  */
 const deleteCoupon = async (req, res) => {
   try {
-    const vendor_id = req.user.id;
     const { couponId } = req.params;
 
-    const coupon = await Coupon.findOne({
-      where: { id: couponId, vendor_id }
-    });
+    const coupon = await Coupon.findOne({ where: { id: couponId } });
 
     if (!coupon) {
       return sendError(res, 'Coupon not found', 404);
@@ -143,7 +127,7 @@ const deleteCoupon = async (req, res) => {
 
     await coupon.destroy();
 
-    return sendSuccess(res, 'Coupon deleted successfully');
+    return sendSuccess(res, null, 'Coupon deleted successfully');
   } catch (err) {
     console.error('Error deleting coupon:', err);
     return sendError(res, err.message, 500);
@@ -151,28 +135,31 @@ const deleteCoupon = async (req, res) => {
 };
 
 /**
- * @description Get available coupons for a specific vendor (public for users)
+ * @description Get available coupons (global; public for users)
  */
 const getAvailableCoupons = async (req, res) => {
   try {
-    const { vendor_id } = req.query;
-
-    if (!vendor_id) {
-      return sendError(res, 'vendor_id is required', 400);
-    }
-
     const now = new Date();
+    // Debug logging
+    console.log('Fetching available coupons. Current time:', now);
+
     const coupons = await Coupon.findAll({
       where: {
-        vendor_id,
         active: true,
-        expiry: { [Op.or]: [{ [Op.gt]: now }, null] },
-        used_count: { [Op.lt]: literal('usage_limit') }
-      },
-      attributes: ['id', 'code', 'type', 'value', 'expiry', 'usage_limit', 'used_count']
+        // Simplification for debugging: check if any coupons exist first
+      }
     });
 
-    return sendSuccess(res, 'Available coupons retrieved successfully', { coupons, count: coupons.length });
+    // Filter in memory for now to debug SQL issues
+    const activeCoupons = coupons.filter(c => {
+        const isNotExpired = !c.expiry || new Date(c.expiry) > now;
+        const isNotUsedUp = c.used_count < c.usage_limit;
+        return isNotExpired && isNotUsedUp;
+    });
+
+    console.log(`Found ${coupons.length} total active coupons, ${activeCoupons.length} valid for user.`);
+
+    return sendSuccess(res, { coupons: activeCoupons, count: activeCoupons.length }, 'Available coupons retrieved successfully');
   } catch (err) {
     console.error('Error fetching available coupons:', err);
     return sendError(res, err.message, 500);
@@ -180,25 +167,20 @@ const getAvailableCoupons = async (req, res) => {
 };
 
 /**
- * @description Apply/validate a coupon code
+ * @description Apply/validate a coupon code (global)
  */
 const applyCoupon = async (req, res) => {
   try {
-    const { code, amount, vendor_id } = req.body;
+    const { code, amount } = req.body;
 
     if (!code) {
       return sendError(res, 'Coupon code is required', 400);
-    }
-
-    if (!vendor_id) {
-      return sendError(res, 'vendor_id is required', 400);
     }
 
     const now = new Date();
     const coupon = await Coupon.findOne({
       where: {
         code: code.toUpperCase(),
-        vendor_id,
         active: true,
         expiry: { [Op.or]: [{ [Op.gt]: now }, null] },
         used_count: { [Op.lt]: literal('usage_limit') }
@@ -223,7 +205,7 @@ const applyCoupon = async (req, res) => {
       total_after_discount = Math.max(0, amount - discount_amount);
     }
 
-    return sendSuccess(res, 'Coupon applied successfully', {
+    return sendSuccess(res, {
       coupon: {
         id: coupon.id,
         code: coupon.code,
@@ -235,7 +217,7 @@ const applyCoupon = async (req, res) => {
         discount_amount,
         total_after_discount
       }
-    });
+    }, 'Coupon applied successfully');
   } catch (err) {
     console.error('Error applying coupon:', err);
     return sendError(res, err.message, 500);

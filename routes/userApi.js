@@ -577,17 +577,10 @@ router.get('/payments/:paymentId', (req, res) => {
  * @swagger
  * /api/user/coupons/available:
  *   get:
- *     summary: Get available coupons for a vendor
+ *     summary: Get available coupons
  *     tags: [User API]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: vendor_id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Vendor ID to get coupons for
  *     responses:
  *       200:
  *         description: List of available coupons
@@ -610,14 +603,10 @@ router.get('/coupons/available', couponCtrl.getAvailableCoupons);
  *             type: object
  *             required:
  *               - code
- *               - vendor_id
  *             properties:
  *               code:
  *                 type: string
  *                 example: "SAVE20"
- *               vendor_id:
- *                 type: integer
- *                 example: 1
  *               amount:
  *                 type: number
  *                 example: 5000

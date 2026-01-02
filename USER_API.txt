@@ -1,146 +1,78 @@
-User API – Integration Guide (Text)
-Base Path: /api/user
+USER API DOCUMENTATION
+======================
+Base URL: /api/user
 
-Authentication
-- Most endpoints require Authorization: Bearer <JWT>
-- Public (no auth): signup, login-mobile, login-mobile/request-otp, verify-otp, forgot-password, reset-password
+AUTHENTICATION
+--------------
+POST /api/user/auth/register
+- Body: { name, email, password, phone, role } (role: USER)
+POST /api/user/auth/login
+- Body: { email, password }
+- Response: { token, user }
 
-Headers
-- Content-Type: application/json (unless noted multipart/form-data)
-- Authorization: Bearer <JWT> (for protected endpoints)
+HOTELS
+------
+GET /api/public/hotels
+- Query: ?location=London&checkIn=...
+GET /api/user/hotels/:hotelId
+- Get detailed hotel info
 
-User Authentication
-- POST /api/user/auth/signup
-  - Content-Type: multipart/form-data
-  - Body: full_name, email, phone, password, address?, profile_photo?(file)
-  - Response: 201 Created, user registered; OTP verification flow applies
-- POST /api/user/auth/login-mobile/request-otp
-  - Body: phone
-  - Response: 200, OTP sent
-- POST /api/user/auth/login-mobile
-  - Body: phone, password
-  - Response: 200, JWT token
-- POST /api/user/auth/verify-otp
-  - Body: phone, otp
-  - Response: 200, JWT token
-- POST /api/user/auth/forgot-password
-  - Body: email
-  - Response: 200, reset email sent
-- POST /api/user/auth/reset-password
-  - Body: token, new_password
-  - Response: 200, password reset
-- POST /api/user/auth/change-password
-  - Auth required
-  - Body: old_password, new_password
-  - Response: 200, password updated
-- POST /api/user/auth/logout
-  - Auth required
-  - Response: 200, logout successful
+BOOKINGS
+--------
+POST /api/user/bookings
+- Body: { 
+    hotel_id: 1, 
+    room_type: "AC" | "NON_AC", 
+    check_in: "YYYY-MM-DD", 
+    check_out: "YYYY-MM-DD", 
+    guests: 2,
+    coupon_code: "WELCOME20" (Optional)
+  }
+GET /api/user/bookings
+GET /api/user/bookings/:bookingId
+POST /api/user/bookings/:bookingId/cancel
 
-Profile
-- GET /api/user/profile
-  - Auth required
-  - Response: 200, user profile { id, full_name, email, phone, address, profile_photo? }
-- PUT /api/user/profile
-  - Auth required
-  - Content-Type: multipart/form-data
-  - Body: full_name?, phone?, address?, profile_photo?(file)
-  - Response: 200, updated user profile
+PAYMENTS
+--------
+GET /api/public/payment-key
+- Returns: { key: "rzp_test_..." }
+POST /api/user/bookings/:bookingId/pay
+- Returns: { order_id, amount, currency, key }
+POST /api/user/bookings/:bookingId/payment/complete
+- Body: { gateway_payment_id, status: "success" | "failed" }
 
-Bookings
-- POST /api/user/bookings
-  - Auth required
-  - Body: hotel_id, room_type(AC|NON_AC), check_in(YYYY-MM-DD), check_out(YYYY-MM-DD), guests?, coupon_code?
-  - Validation: check_out after check_in; check_in not before today; room_type must be AC or NON_AC
-  - Response: 201, booking created with pricing breakdown:
-    - data.booking: Booking
-    - data.amount: final amount after discount
-    - data.price_per_night: price used
-    - data.base_amount: original amount
-    - data.discount_amount: applied discount
-    - data.nights: number of nights
-    - data.coupon_applied: code or null
-- GET /api/user/bookings
-  - Auth required
-  - Query: page=1, limit=10, status?(PENDING|CONFIRMED|CANCELLED|COMPLETED)
-  - Response: 200, bookings[] with pagination
-- GET /api/user/bookings/{bookingId}
-  - Auth required
-  - Response: 200, booking details
-- GET /api/user/payment-key
-  - Auth required
-  - Response: 200, { key_id: "rzp_..." } (Use this if frontend needs Razorpay key ID)
-- POST /api/user/bookings/{bookingId}/pay
-  - Auth required
-  - Action: Create Razorpay order and Payment record
-  - Response: 200
-    - data.order: { id, amount, currency, receipt }
-    - data.payment: { id, booking_id, gateway, gateway_payment_id, amount, status: INITIATED }
-    - data.key_id: "rzp_..." (Razorpay public key)
-- POST /api/user/bookings/{bookingId}/payment/complete
-  - Auth required
-  - Body: gateway_payment_id?, status(success|failed)
-  - Action: Update Payment and Booking status (CONFIRMED on success; CANCELLED on failed)
-  - Response: 200, { payment, booking }
-- POST /api/user/bookings/{bookingId}/cancel
-  - Auth required
-  - Rules: cannot cancel <24h before check-in if CONFIRMED
-  - Response: 200, booking cancelled
+COUPONS
+-------
+GET /api/user/coupons/available
+- Returns: List of active global coupons
 
-Reviews
-- POST /api/user/reviews
-  - Auth required
-  - Body: hotel_id, rating(1-5), comment
-  - Requires: user has a COMPLETED booking for the hotel; one review per user/hotel
-  - Response: 201, created review
-- GET /api/user/reviews
-  - Auth required
-  - Response: 200, list of user reviews
-- PUT /api/user/reviews/{reviewId}
-  - Auth required
-  - Body: rating?, comment?
-  - Response: 200, updated review
-- DELETE /api/user/reviews/{reviewId}
-  - Auth required
-  - Response: 200, deleted review
+POST /api/user/coupons/apply
+- Body: { 
+    code: "SAVE20", 
+    amount: 1000 (Optional, to calculate exact discount) 
+  }
+- Response: {
+    success: true,
+    data: {
+      coupon: { code, type, value },
+      discount: {
+        input_amount: 1000,
+        discount_amount: 200,
+        total_after_discount: 800
+      }
+    }
+  }
 
-Coupons
-- GET /api/user/coupons/available?vendor_id={vendorId}
-  - Auth required
-  - Response: 200, available coupons for vendor
-- POST /api/user/coupons/apply
-  - Auth required
-  - Body: code, vendor_id, amount
-  - Response: 200, coupon validated (discount calculation applied during booking)
+REVIEWS
+-------
+POST /api/user/reviews
+- Body: { hotel_id: 1, rating: 5, comment: "Great stay!" }
+GET /api/user/reviews/my-reviews
+PUT /api/user/reviews/:reviewId
+DELETE /api/user/reviews/:reviewId
 
-Payments (additional placeholders)
-- POST /api/user/payments/initiate
-  - Auth required
-  - Body: booking_id, amount
-  - Response: 200 (placeholder). Prefer POST /api/user/bookings/{bookingId}/pay for real Razorpay integration.
-- GET /api/user/payments
-  - Auth required
-  - Response: 200 (placeholder)
-- GET /api/user/payments/{paymentId}
-  - Auth required
-  - Response: 200 (placeholder)
-
-Wishlist
-- POST /api/user/wishlist/hotels/{hotelId}
-  - Auth required
-  - Response: 200, hotel added to wishlist
-- DELETE /api/user/wishlist/hotels/{hotelId}
-  - Auth required
-  - Response: 200, hotel removed from wishlist
-- GET /api/user/wishlist
-  - Auth required
-  - Response: 200, list of wishlist hotels
-
-Testing Notes
-- Use JWT from auth endpoints in Authorization header
-- Payment test flow:
-  1) Create booking → POST /api/user/bookings
-  2) Initiate payment → POST /api/user/bookings/{bookingId}/pay
-  3) Complete payment → POST /api/user/bookings/{bookingId}/payment/complete with { status: "success" }
-  4) Booking moves to CONFIRMED on success
-
+PROFILE
+-------
+GET /api/user/profile
+PUT /api/user/profile
+- Multipart form data: full_name, phone, address, profile_photo (file)
