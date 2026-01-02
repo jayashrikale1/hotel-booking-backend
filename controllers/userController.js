@@ -539,11 +539,12 @@ module.exports = {
     if (booking.status === 'CONFIRMED') {
       const checkInDate = new Date(booking.check_in);
       const now = new Date();
-      const hoursUntilCheckIn = (checkInDate - now) / (1000 * 60 * 60);
+      // For development/testing: allow cancellation anytime
+      // const hoursUntilCheckIn = (checkInDate - now) / (1000 * 60 * 60);
       
-      if (hoursUntilCheckIn < 24) {
-        throw createError('Cannot cancel booking less than 24 hours before check-in', 400);
-      }
+      // if (hoursUntilCheckIn < 24) {
+      //   throw createError('Cannot cancel booking less than 24 hours before check-in', 400);
+      // }
     }
 
     // Cancel booking and restore room availability
