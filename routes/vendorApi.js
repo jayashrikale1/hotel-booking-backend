@@ -1,7 +1,6 @@
 // routes/vendorApi.js - VENDOR/OWNER ONLY API ENDPOINTS
 const router = require('express').Router();
 const vendorCtrl = require('../controllers/vendorController');
-const couponCtrl = require('../controllers/couponController');
 const { authenticate, requireRole } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
@@ -97,6 +96,59 @@ router.use('/auth', vendorAuthRoutes);
 // All vendor routes require OWNER/VENDOR role
 router.use(authenticate, requireRole(['OWNER', 'VENDOR', 'ADMIN']));
 
+// ============ PROFILE MANAGEMENT ============
+/**
+ * @swagger
+ * /api/vendor/profile:
+ *   get:
+ *     summary: Get vendor profile
+ *     tags: [Vendor API]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Vendor profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     vendor:
+ *                       type: object
+ *                       properties:
+ *                         id: { type: integer }
+ *                         full_name: { type: string }
+ *                         email: { type: string }
+ *                         phone: { type: string }
+ *                         business_name: { type: string }
+ *                         business_address: { type: string }
+ *                         status: { type: string }
+ *   put:
+ *     summary: Update vendor profile
+ *     tags: [Vendor API]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               full_name: { type: string }
+ *               phone: { type: string }
+ *               business_name: { type: string }
+ *               business_address: { type: string }
+ *     responses:
+ *       200:
+ *         description: Vendor profile updated successfully
+ */
+router.get('/profile', vendorCtrl.getVendorProfile);
+router.put('/profile', vendorCtrl.updateVendorProfile);
 
 /**
  * @swagger
@@ -1008,98 +1060,5 @@ router.get('/reports/occupancy', (req, res) => {
 router.get('/reports/financial', (req, res) => {
   res.json({ message: 'Vendor financial reports endpoint' });
 });
-
-// ============ COUPON MANAGEMENT API ============
-/**
- * @swagger
- * /api/vendor/coupons:
- *   get:
- *     summary: Get all my coupons
- *     tags: [Vendor API]
- *     security: [{ bearerAuth: [] }]
- *     responses:
- *       200:
- *         description: List of vendor coupons
- *   post:
- *     summary: Create a new coupon
- *     tags: [Vendor API]
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [code, type, value]
- *             properties:
- *               code: { type: string, example: "SAVE20" }
- *               type: { type: string, enum: [FLAT, PERCENT], example: "PERCENT" }
- *               value: { type: number, example: 20 }
- *               expiry: { type: string, format: date-time }
- *               usage_limit: { type: integer, example: 100 }
- *               active: { type: boolean, example: true }
- *     responses:
- *       201:
- *         description: Coupon created successfully
- */
-router.get('/coupons', requireRole(['ADMIN']), couponCtrl.getMyCoupons);
-router.post('/coupons', requireRole(['ADMIN']), couponCtrl.createCoupon);
-
-/**
- * @swagger
- * /api/vendor/coupons/{couponId}:
- *   get:
- *     summary: Get coupon by ID
- *     tags: [Vendor API]
- *     security: [{ bearerAuth: [] }]
- *     parameters:
- *       - in: path
- *         name: couponId
- *         required: true
- *         schema: { type: integer }
- *     responses:
- *       200:
- *         description: Coupon details
- *   put:
- *     summary: Update a coupon
- *     tags: [Vendor API]
- *     security: [{ bearerAuth: [] }]
- *     parameters:
- *       - in: path
- *         name: couponId
- *         required: true
- *         schema: { type: integer }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               code: { type: string }
- *               type: { type: string, enum: [FLAT, PERCENT] }
- *               value: { type: number }
- *               expiry: { type: string, format: date-time }
- *               usage_limit: { type: integer }
- *               active: { type: boolean }
- *     responses:
- *       200:
- *         description: Coupon updated successfully
- *   delete:
- *     summary: Delete a coupon
- *     tags: [Vendor API]
- *     security: [{ bearerAuth: [] }]
- *     parameters:
- *       - in: path
- *         name: couponId
- *         required: true
- *         schema: { type: integer }
- *     responses:
- *       200:
- *         description: Coupon deleted successfully
- */
-router.get('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.getCouponById);
-router.put('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.updateCoupon);
-router.delete('/coupons/:couponId', requireRole(['ADMIN']), couponCtrl.deleteCoupon);
 
 module.exports = router;

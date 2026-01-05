@@ -576,11 +576,7 @@ updateHotel: asyncHandler(async (req, res) => {
 
     const bookings = await Booking.findAndCountAll({
       where,
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'full_name', 'email', 'phone'] },
-        { model: Hotel, as: 'hotel', attributes: ['id', 'name'] },
-        { model: Room, as: 'room', attributes: ['id', 'type', 'price'] }
-      ],
+      include: getBookingIncludes(),
       limit,
       offset,
       order: [['createdAt', 'DESC']]
@@ -612,11 +608,7 @@ updateHotel: asyncHandler(async (req, res) => {
 
     const { rows, count } = await Booking.findAndCountAll({
       where,
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'full_name', 'email', 'phone'] },
-        { model: Hotel, as: 'hotel', attributes: ['id', 'name'] },
-        { model: Room, as: 'room', attributes: ['id', 'type', 'price'] }
-      ],
+      include: getBookingIncludes(),
       limit,
       offset,
       order: [['createdAt', 'DESC']]
@@ -768,5 +760,50 @@ updateHotel: asyncHandler(async (req, res) => {
       totalRevenue,
       count: bookings.length
     }, 'Revenue report generated successfully');
+  }),
+
+  // ============ PROFILE MANAGEMENT ============
+
+  /**
+   * Get vendor profile
+   */
+  getVendorProfile: asyncHandler(async (req, res) => {
+    const vendor = await Vendor.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
+
+    if (!vendor) {
+      throw createError('Vendor profile not found', 404);
+    }
+
+    sendSuccess(res, { vendor }, 'Vendor profile retrieved successfully');
+  }),
+
+  /**
+   * Update vendor profile
+   */
+  updateVendorProfile: asyncHandler(async (req, res) => {
+    const vendor = await Vendor.findByPk(req.user.id);
+
+    if (!vendor) {
+      throw createError('Vendor profile not found', 404);
+    }
+
+    const { full_name, phone, business_name, business_address } = req.body;
+    const updates = {};
+
+    if (full_name) updates.full_name = full_name;
+    if (phone) updates.phone = phone;
+    if (business_name) updates.business_name = business_name;
+    if (business_address) updates.business_address = business_address;
+
+    await vendor.update(updates);
+
+    // Return updated vendor without password
+    const updatedVendor = await Vendor.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
+
+    sendSuccess(res, { vendor: updatedVendor }, 'Vendor profile updated successfully');
   })
 };

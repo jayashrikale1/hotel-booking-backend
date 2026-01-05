@@ -101,6 +101,14 @@ router.post('/users/:userId/unblock', requireRole(['ADMIN','VENDOR']), adminCtrl
  *       - in: query
  *         name: status
  *         schema: { type: string, enum: [PENDING, CONFIRMED, CANCELLED, COMPLETED] }
+ *       - in: query
+ *         name: start_date
+ *         schema: { type: string, format: date }
+ *         description: Filter by check-in date (YYYY-MM-DD)
+ *       - in: query
+ *         name: end_date
+ *         schema: { type: string, format: date }
+ *         description: Filter by check-in date (YYYY-MM-DD)
  *     responses:
  *       200:
  *         description: User bookings retrieved successfully
@@ -182,6 +190,37 @@ router.get('/vendors', requireRole(['ADMIN']), adminCtrl.getVendors);
  *         description: Forbidden - Admin or Vendor role required
  */
 router.get('/vendors/:vendorId', requireRole(['ADMIN', 'VENDOR']), adminCtrl.getVendorById);
+
+/**
+ * @swagger
+ * /api/admin/vendors/{vendorId}/hotels:
+ *   get:
+ *     summary: Get all hotels of a specific vendor
+ *     tags: [Admin - Vendors]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: vendorId
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [PENDING, APPROVED, REJECTED, INACTIVE] }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search by name, address, or city
+ *     responses:
+ *       200:
+ *         description: Vendor hotels retrieved successfully
+ */
+router.get('/vendors/:vendorId/hotels', requireRole(['ADMIN']), adminCtrl.getVendorHotels);
 
 // ============ ALL ROUTES BELOW REQUIRE ADMIN ROLE ONLY ============
 router.use(requireRole(['ADMIN']));
@@ -291,12 +330,75 @@ router.post('/vendors/:vendorId/activate', adminCtrl.activateVendor);
 router.post('/vendors/:vendorId/deactivate', adminCtrl.deactivateVendor);
 
 // ============ HOTEL MANAGEMENT API ============
+
+/**
+ * @swagger
+ * /api/admin/hotels:
+ *   get:
+ *     summary: Get all hotels (Paginated)
+ *     tags: [Admin - Hotels]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [PENDING, APPROVED, REJECTED, INACTIVE] }
+ *       - in: query
+ *         name: vendor_id
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search by name, address, or city
+ *       - in: query
+ *         name: city
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Hotels retrieved successfully
+ */
 router.get('/hotels', requireRole(['ADMIN']), adminCtrl.getAllHotels);
 router.get('/hotels/:hotelId', requireRole(['ADMIN']), adminCtrl.getHotelById);
 router.put('/hotels/:hotelId', requireRole(['ADMIN']), adminCtrl.updateHotel);
 router.delete('/hotels/:hotelId', requireRole(['ADMIN']), adminCtrl.deleteHotel);
 router.post('/hotels/:hotelId/approve', requireRole(['ADMIN']), adminCtrl.approveHotel);
 router.post('/hotels/:hotelId/reject', requireRole(['ADMIN']), adminCtrl.rejectHotel);
+
+/**
+ * @swagger
+ * /api/admin/hotels/{hotelId}/status:
+ *   patch:
+ *     summary: Update hotel status
+ *     tags: [Admin - Hotels]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: hotelId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [PENDING, APPROVED, REJECTED, INACTIVE] }
+ *     responses:
+ *       200:
+ *         description: Hotel status updated successfully
+ *       400:
+ *         description: Invalid status value
+ *       404:
+ *         description: Hotel not found
+ */
+router.patch('/hotels/:hotelId/status', requireRole(['ADMIN']), adminCtrl.updateHotelStatus);
 
 // ============ ROOM MANAGEMENT API ============
 router.get('/rooms', adminCtrl.getAllRooms);
@@ -305,7 +407,35 @@ router.put('/rooms/:roomId', adminCtrl.updateRoom);
 router.delete('/rooms/:roomId', adminCtrl.deleteRoom);
 
 // ============ BOOKING MANAGEMENT API ============
-router.get('/bookings', adminCtrl.getAllBookings);
+/**
+ * @swagger
+ * /api/admin/bookings:
+ *   get:
+ *     summary: Get all bookings
+ *     tags: [Admin - Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *       - in: query
+ *         name: start_date
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: end_date
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search by user name, email, hotel name or booking ID
+ *     responses:
+ *       200:
+ *         description: Bookings retrieved successfully
+ */
+router.get('/bookings', requireRole(['ADMIN']), adminCtrl.getAllBookings);
 router.get('/bookings/:bookingId', adminCtrl.getBookingById);
 router.put('/bookings/:bookingId', adminCtrl.updateBooking);
 router.post('/bookings/:bookingId/cancel', adminCtrl.cancelBooking);
@@ -330,15 +460,62 @@ router.delete('/reviews/:reviewId', (req, res) => {
 });
 
 // ============ PAYMENT MANAGEMENT API ============
-router.get('/payments', (req, res) => {
-  // Admin can view all payments
-  res.json({ message: 'Admin payments list endpoint' });
-});
 
-router.get('/payments/:paymentId', (req, res) => {
-  // Admin can view payment details
-  res.json({ message: 'Admin payment details endpoint' });
-});
+/**
+ * @swagger
+ * /api/admin/payments:
+ *   get:
+ *     summary: Get all payments (Paginated)
+ *     tags: [Admin - Payments]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [INITIATED, SUCCESS, FAILED] }
+ *       - in: query
+ *         name: gateway
+ *         schema: { type: string }
+ *       - in: query
+ *         name: booking_id
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: start_date
+ *         schema: { type: string, format: date-time }
+ *         description: Filter by creation date
+ *       - in: query
+ *         name: end_date
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Payments retrieved successfully
+ */
+router.get('/payments', requireRole(['ADMIN']), adminCtrl.getAllPayments);
+
+/**
+ * @swagger
+ * /api/admin/payments/{paymentId}:
+ *   get:
+ *     summary: Get payment by ID
+ *     tags: [Admin - Payments]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Payment details retrieved successfully
+ *       404:
+ *         description: Payment not found
+ */
+router.get('/payments/:paymentId', requireRole(['ADMIN']), adminCtrl.getPaymentById);
 
 // ============ COUPON MANAGEMENT API (ADMIN ONLY) ============
 /**

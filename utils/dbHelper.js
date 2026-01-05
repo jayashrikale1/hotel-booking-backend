@@ -101,8 +101,14 @@ const getHotelIncludes = () => [
  */
 const getBookingIncludes = () => [
   { model: require('../models').User, as: 'user', attributes: ['id', 'full_name', 'email', 'phone'] },
-  { model: require('../models').Hotel, as: 'hotel', attributes: ['id', 'name', 'address', 'city'] },
-  // { model: require('../models').Room, as: 'room', attributes: ['id', 'type', 'price'] }
+  { 
+    model: require('../models').Hotel, 
+    as: 'hotel', 
+    attributes: ['id', 'name', 'address', 'city', 'state', 'phone', 'email'],
+    include: [{ model: require('../models').HotelImage, as: 'images', limit: 1, attributes: ['url'] }]
+  },
+  { model: require('../models').Room, as: 'room', attributes: ['id', 'type', 'price'] },
+  { model: require('../models').Payment, as: 'payment' }
 ];
 
 /**

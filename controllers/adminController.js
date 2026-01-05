@@ -340,18 +340,21 @@ module.exports = {
     const { userId } = req.params;
     const { page, limit } = validatePagination(req.query.page, req.query.limit);
     const offset = getPaginationOffset(page, limit);
-    const { status } = req.query;
+    const { status, start_date, end_date } = req.query;
 
     const where = { user_id: userId };
     if (status) where.status = status;
 
+    // Date range filter for check-in
+    if (start_date && end_date) {
+        where.check_in = { [Op.between]: [start_date, end_date] };
+    } else if (start_date) {
+        where.check_in = { [Op.gte]: start_date };
+    }
+
     const { rows, count } = await Booking.findAndCountAll({
       where,
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'full_name', 'email'] },
-        { model: Hotel, as: 'hotel', attributes: ['id', 'name'] },
-        { model: Room, as: 'room', attributes: ['id', 'type', 'price'] }
-      ],
+      include: getBookingIncludes(),
       limit,
       offset,
       order: [['createdAt', 'DESC']]
@@ -537,22 +540,92 @@ module.exports = {
     } }, 'Vendor suspended successfully');
   }),
 
-  // ============ HOTEL MANAGEMENT ============
-
   /**
-   * Get all hotels with vendor information
+   * Get all hotels of a specific vendor
    */
-  getAllHotels: asyncHandler(async (req, res) => {
-    const hotels = await Hotel.findAll({
+  getVendorHotels: asyncHandler(async (req, res) => {
+    const { vendorId } = req.params;
+    const { page, limit } = validatePagination(req.query.page, req.query.limit);
+    const offset = getPaginationOffset(page, limit);
+    const { status, search } = req.query;
+
+    const where = { vendor_id: vendorId };
+    if (status) where.status = status;
+    
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { address: { [Op.like]: `%${search}%` } },
+        { city: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { rows, count } = await Hotel.findAndCountAll({
+      where,
       include: [
-        { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name'] },
-        { model: HotelImage, as: 'images' },
-        // { model: Room, as: 'rooms' }
+        { model: HotelImage, as: 'images' }
       ],
+      limit,
+      offset,
       order: [['createdAt', 'DESC']]
     });
 
-    sendSuccess(res, { hotels }, 'Hotels retrieved successfully');
+    const pagination = {
+      page,
+      limit,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      hasNext: offset + rows.length < count,
+      hasPrev: page > 1
+    };
+
+    return sendPaginatedResponse(res, rows, pagination, 'Vendor hotels retrieved successfully');
+  }),
+
+  // ============ HOTEL MANAGEMENT ============
+
+  /**
+   * Get all hotels with vendor information (Paginated & Filterable)
+   */
+  getAllHotels: asyncHandler(async (req, res) => {
+    const { page, limit } = validatePagination(req.query.page, req.query.limit);
+    const offset = getPaginationOffset(page, limit);
+    const { status, vendor_id, search, city } = req.query;
+
+    const where = {};
+    if (status) where.status = status;
+    if (vendor_id) where.vendor_id = vendor_id;
+    if (city) where.city = city;
+    
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { address: { [Op.like]: `%${search}%` } },
+        { city: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { rows, count } = await Hotel.findAndCountAll({
+      where,
+      include: [
+        { model: Vendor, as: 'vendor', attributes: ['id', 'full_name', 'email', 'business_name'] },
+        { model: HotelImage, as: 'images' },
+      ],
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']]
+    });
+
+    const pagination = {
+      page,
+      limit,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      hasNext: offset + rows.length < count,
+      hasPrev: page > 1
+    };
+
+    return sendPaginatedResponse(res, rows, pagination, 'Hotels retrieved successfully');
   }),
 
   /**
@@ -640,22 +713,86 @@ module.exports = {
     sendSuccess(res, { hotel }, 'Hotel rejected successfully');
   }),
 
+  /**
+   * Update hotel status (PENDING, APPROVED, REJECTED, INACTIVE)
+   */
+  updateHotelStatus: asyncHandler(async (req, res) => {
+    const { status } = req.body;
+    const hotel = await Hotel.findByPk(req.params.hotelId);
+    
+    if (!hotel) {
+      const error = new Error('Hotel not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const validStatuses = ['PENDING', 'APPROVED', 'REJECTED', 'INACTIVE'];
+    if (!status || !validStatuses.includes(status)) {
+        const error = new Error(`Invalid status value. Allowed: ${validStatuses.join(', ')}`);
+        error.statusCode = 400;
+        throw error;
+    }
+    
+    await hotel.update({ status });
+    sendSuccess(res, { hotel }, `Hotel status updated to ${status}`);
+  }),
+
   // ============ BOOKING MANAGEMENT ============
 
   /**
-   * Get all bookings with user and hotel information
+   * Get all bookings with user and hotel information (Paginated & Filterable)
    */
   getAllBookings: asyncHandler(async (req, res) => {
-    const bookings = await Booking.findAll({
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'full_name', 'email'] },
-        { model: Hotel, as: 'hotel', attributes: ['id', 'name'] },
-        { model: Room, as: 'room', attributes: ['id', 'type', 'price'] }
-      ],
+    const { page, limit } = validatePagination(req.query.page, req.query.limit);
+    const offset = getPaginationOffset(page, limit);
+    const { status, hotel_id, user_id, start_date, end_date, search } = req.query;
+
+    const where = {};
+    if (status) where.status = status;
+    if (hotel_id) where.hotel_id = hotel_id;
+    if (user_id) where.user_id = user_id;
+    
+    // Date range filter for check-in
+    if (start_date && end_date) {
+        where.check_in = { [Op.between]: [start_date, end_date] };
+    } else if (start_date) {
+        where.check_in = { [Op.gte]: start_date };
+    }
+
+    // Search functionality
+    if (search) {
+      const searchConditions = [
+        { '$user.full_name$': { [Op.like]: `%${search}%` } },
+        { '$user.email$': { [Op.like]: `%${search}%` } },
+        { '$hotel.name$': { [Op.like]: `%${search}%` } }
+      ];
+      
+      // If search is a number, try searching by Booking ID
+      if (!isNaN(parseInt(search))) {
+        searchConditions.push({ id: parseInt(search) });
+      }
+
+      where[Op.or] = searchConditions;
+    }
+
+    const { rows, count } = await Booking.findAndCountAll({
+      where,
+      include: getBookingIncludes(),
+      limit,
+      offset,
       order: [['createdAt', 'DESC']]
     });
 
-    sendSuccess(res, { bookings }, 'Bookings retrieved successfully');
+    const pagination = {
+      page,
+      limit,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      hasNext: offset + rows.length < count,
+      hasPrev: page > 1
+    };
+
+    return sendPaginatedResponse(res, rows, pagination, 'Bookings retrieved successfully');
   }),
 
   /**
@@ -663,12 +800,7 @@ module.exports = {
    */
   getBookingById: asyncHandler(async (req, res) => {
     const booking = await Booking.findByPk(req.params.bookingId, {
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'full_name', 'email'] },
-        { model: Hotel, as: 'hotel', attributes: ['id', 'name'] },
-        { model: Room, as: 'room', attributes: ['id', 'type', 'price'] },
-        { model: Payment, as: 'payment' }
-      ]
+      include: getBookingIncludes()
     });
     
     if (!booking) {
@@ -781,6 +913,98 @@ module.exports = {
     await room.destroy();
     sendSuccess(res, null, 'Room deleted successfully');
   }),
+
+  // ============ PAYMENT MANAGEMENT ============
+
+  /**
+   * Get all payments (Paginated & Filterable)
+   */
+  getAllPayments: asyncHandler(async (req, res) => {
+    const { page, limit } = validatePagination(req.query.page, req.query.limit);
+    const offset = getPaginationOffset(page, limit);
+    const { status, gateway, booking_id, start_date, end_date } = req.query;
+
+    const where = {};
+    if (status) where.status = status;
+    if (gateway) where.gateway = gateway;
+    if (booking_id) where.booking_id = booking_id;
+
+    if (start_date && end_date) {
+        where.createdAt = { [Op.between]: [start_date, end_date] };
+    }
+
+    const { rows, count } = await Payment.findAndCountAll({
+      where,
+      include: [
+        { 
+            model: Booking, 
+            as: 'booking',
+            attributes: ['id', 'status', 'amount'],
+            include: [
+                { model: User, as: 'user', attributes: ['id', 'full_name', 'email'] }
+            ]
+        }
+      ],
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Map to include transaction_id alias for gateway_payment_id
+    const payments = rows.map(p => {
+        const payment = p.toJSON();
+        return {
+            ...payment,
+            transaction_id: payment.gateway_payment_id
+        };
+    });
+
+    const pagination = {
+      page,
+      limit,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      hasNext: offset + rows.length < count,
+      hasPrev: page > 1
+    };
+
+    return sendPaginatedResponse(res, payments, pagination, 'Payments retrieved successfully');
+  }),
+
+  /**
+   * Get payment by ID
+   */
+  getPaymentById: asyncHandler(async (req, res) => {
+    const payment = await Payment.findByPk(req.params.paymentId, {
+      include: [
+        { 
+            model: Booking, 
+            as: 'booking',
+            include: [
+                { model: User, as: 'user', attributes: ['id', 'full_name', 'email', 'phone'] },
+                { model: Hotel, as: 'hotel', attributes: ['id', 'name'] }
+            ]
+        }
+      ]
+    });
+    
+    if (!payment) {
+      const error = new Error('Payment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Add transaction_id alias
+    const paymentData = {
+        ...payment.toJSON(),
+        transaction_id: payment.gateway_payment_id
+    };
+
+    sendSuccess(res, { payment: paymentData }, 'Payment details retrieved successfully');
+  }),
+
+  // ============ COUPON MANAGEMENT ============
+
 
   // ============ DASHBOARD STATS ============
 
