@@ -44,6 +44,11 @@ router.get('/hotels/:hotelId/rooms', userCtrl.getRoomsByHotel);
  *           type: string
  *           format: date
  *         description: Optional check-out date (YYYY-MM-DD) to compute availability
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Optional hotel name to verify/search
  *     responses:
  *       200:
  *         description: Room types retrieved successfully

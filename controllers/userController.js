@@ -154,8 +154,14 @@ module.exports = {
    * Get hotel room types (AC / NON_AC) with prices and availability
    */
   getHotelRoomTypes: asyncHandler(async (req, res) => {
-    const { check_in, check_out } = req.query;
-    const hotel = await Hotel.findByPk(req.params.hotelId);
+    const { check_in, check_out, search } = req.query;
+    
+    const where = { id: req.params.hotelId };
+    if (search) {
+      where.name = { [Op.like]: `%${search}%` };
+    }
+
+    const hotel = await Hotel.findOne({ where });
     if (!hotel) {
       throw createError('Hotel not found', 404);
     }
