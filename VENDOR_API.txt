@@ -1,0 +1,174 @@
+VENDOR API DOCUMENTATION
+========================
+Base URL: /api/vendor
+
+AUTHENTICATION
+--------------
+POST /api/vendor/auth/login
+- Body: { email, password }
+- Response: { message, user, token }
+
+POST /api/vendor/auth/forgot-password
+- Body: { email }
+- Sends password reset email to vendor
+
+POST /api/vendor/auth/reset-password
+- Body: { token, new_password }
+
+POST /api/vendor/auth/change-password
+- Headers: Authorization: Bearer <token>
+- Body: { old_password, new_password }
+
+POST /api/vendor/auth/logout
+- Headers: Authorization: Bearer <token>
+
+
+PUBLIC (VENDOR SIDE)
+--------------------
+GET /api/vendor/public/hotels
+- Query (optional): ?city=..., ?state=..., ?country=...
+
+GET /api/vendor/public/hotels/:hotelId
+- Get single approved hotel details (public)
+
+
+PROFILE
+-------
+GET /api/vendor/profile
+- Headers: Authorization: Bearer <token>
+- Returns vendor profile { id, full_name, email, phone, business_name, business_address, status }
+
+PUT /api/vendor/profile
+- Headers: Authorization: Bearer <token>
+- Body (any subset):
+  { full_name, phone, business_name, business_address }
+
+
+HOTELS
+------
+POST /api/vendor/hotels
+- Headers: Authorization: Bearer <token>
+- Body (main fields):
+  {
+    name,
+    description,
+    address,
+    city,
+    state,
+    pincode,
+    country,
+    latitude,
+    longitude,
+    map_url,
+    amenities,
+    hotel_features,
+    phone,
+    email,
+    rating,
+    total_rooms,
+    available_rooms,
+    ac_rooms,
+    non_ac_rooms,
+    base_price,
+    ac_room_price,
+    non_ac_room_price,
+    check_in_time,
+    check_out_time,
+    cancellation_policy,
+    gst_number,
+    featured
+  }
+- vendor_id and status are set automatically on backend
+
+GET /api/vendor/hotels
+- Headers: Authorization: Bearer <token>
+- Returns hotels created by this vendor with pagination info
+
+GET /api/vendor/hotels/:hotelId
+- Headers: Authorization: Bearer <token>
+- Get single hotel details (owned by vendor)
+
+PUT /api/vendor/hotels/:hotelId
+- Headers: Authorization: Bearer <token>
+- Body: same fields as create (cannot change vendor_id or status)
+
+DELETE /api/vendor/hotels/:hotelId
+- Headers: Authorization: Bearer <token>
+
+
+HOTEL IMAGES
+------------
+GET /api/vendor/hotels/:hotelId/images
+- Headers: Authorization: Bearer <token>
+
+POST /api/vendor/hotels/:hotelId/images
+- Headers: Authorization: Bearer <token>
+- Content-Type: multipart/form-data
+- Body: images[] (up to 10 files)
+
+DELETE /api/vendor/images/:imageId
+- Headers: Authorization: Bearer <token>
+
+
+BOOKINGS
+--------
+GET /api/vendor/bookings
+- Headers: Authorization: Bearer <token>
+- Returns bookings for all hotels owned by this vendor
+
+GET /api/vendor/users/:userId/bookings
+- Headers: Authorization: Bearer <token>
+- Query (optional): ?page=1&limit=10&status=PENDING|CONFIRMED|CANCELLED|COMPLETED
+- Returns bookings of a specific user, scoped to current vendor
+
+GET /api/vendor/bookings/:bookingId
+- Headers: Authorization: Bearer <token>
+- Get full booking details
+
+PUT /api/vendor/bookings/:bookingId/status
+- Headers: Authorization: Bearer <token>
+- Body: { status }
+- status: "pending" | "confirmed" | "cancelled" | "completed"
+
+
+DASHBOARD AND REPORTS
+---------------------
+GET /api/vendor/dashboard/stats
+- Headers: Authorization: Bearer <token>
+- Returns: { total_hotels, total_rooms, total_bookings, total_revenue, occupancy_rate }
+
+GET /api/vendor/reports/revenue
+- Headers: Authorization: Bearer <token>
+- Query (optional): ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+
+GET /api/vendor/reports/bookings
+- Headers: Authorization: Bearer <token>
+- Query (optional): ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+
+GET /api/vendor/reports/occupancy
+- Headers: Authorization: Bearer <token>
+- Query (optional): ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+
+GET /api/vendor/reports/financial
+- Headers: Authorization: Bearer <token>
+- Query (optional): ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+
+
+GUESTS AND REVIEWS (PLACEHOLDER IMPLEMENTATIONS)
+-----------------------------------------------
+These endpoints currently return placeholder JSON messages (not full data),
+but URLs are fixed for frontend wiring.
+
+GET /api/vendor/guests
+- Headers: Authorization: Bearer <token>
+
+GET /api/vendor/guests/:guestId
+- Headers: Authorization: Bearer <token>
+
+GET /api/vendor/reviews
+- Headers: Authorization: Bearer <token>
+
+POST /api/vendor/reviews/:reviewId/respond
+- Headers: Authorization: Bearer <token>
+- Body: { response }
+
